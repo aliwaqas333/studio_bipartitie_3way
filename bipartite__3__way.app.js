@@ -14,59 +14,94 @@ const {
   catColors,
   midCatColors,
   criteria,
-  alternatives,
   altTxtC,
   weights,
-  midItems,
-  leftCategoryHeightPcts,
-  midCategoryHeightPcts
 } = window.BIPARTITE_CONSTS;
 
-// Starts from consts but gets overwritten by Excel mid2right sheet at runtime
-let midToAltLinks = window.BIPARTITE_CONSTS.midToAltLinks;
+// These start from consts but are overwritten at runtime from Excel
+let midItems             = window.BIPARTITE_CONSTS.midItems.map(x => ({ ...x }));
+let alternatives         = window.BIPARTITE_CONSTS.alternatives.map(x => ({ ...x }));
+let midToAltLinks        = window.BIPARTITE_CONSTS.midToAltLinks;
+let midCategoryHeightPcts = { ...window.BIPARTITE_CONSTS.midCategoryHeightPcts };
 
 // These are populated dynamically from the Excel file at runtime
 let subToMidLinks = [];
 let subToMidStrengths = [];
 
 // ── Excel loader ──────────────────────────────────────────────────────────────
+function pickExcelFile() {
+  return new Promise((resolve, reject) => {
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = '.xlsx';
+    input.onchange = () => {
+      const file = input.files[0];
+      if (!file) return reject(new Error('No file selected'));
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result);
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
+    };
+    input.click();
+  });
+}
+
 async function loadExcelData() {
-  const resp = await fetch('./Required weights.xlsx?t=' + Date.now());
-  const buf  = await resp.arrayBuffer();
+  let buf;
+  try {
+    const resp = await fetch('./Required weights.xlsx?t=' + Date.now());
+    buf = await resp.arrayBuffer();
+  } catch (e) {
+    // file:// blocked — ask user to pick the file
+    buf = await pickExcelFile();
+  }
   const wb   = XLSX.read(buf, { type: 'array' });
   const ws   = wb.Sheets['Relationship Matrix'];
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
 
-  // Row layout (0-based from first Excel row):
-  //   rows[1] = category headers (Research, Design, …)
-  //   rows[2] = mid-item labels  (Data integration, …) in cols 2–19
-  //   rows[3..16] = 14 sub-criteria rows; col 1 = sub label, cols 2-19 = S/M/W/N
-
-  const MID_COL_START = 2;
-  const MID_COUNT     = 18;
-  const SUB_ROW_START = 3;
   const wMap = { S: weights.S, M: weights.M, W: weights.W, N: 0 };
+  const catNameToId = { 'Process': 'res', 'Qualitative': 'des', 'Quantitative': 'tech', 'Representation': 'comm' };
 
-  // ── 1. Update mid-item labels from Excel column headers ───────────────────
-  const midLabelRow = rows[2] || [];
-  midItems.forEach((item, i) => {
+  // Dynamically find the category header row (contains "Process")
+  let catRowIdx = rows.findIndex(r => r.some(c => c.toString().trim() === 'Process'));
+  if (catRowIdx === -1) catRowIdx = 3; // fallback
+  const midLabelRowIdx = catRowIdx + 1;
+  const SUB_ROW_START  = catRowIdx + 2;
+
+  // Find first mid item column (first col in category row that has "Process")
+  const catRow      = rows[catRowIdx] || [];
+  const midLabelRow = rows[midLabelRowIdx] || [];
+  const MID_COL_START = catRow.findIndex(c => c.toString().trim() === 'Process');
+  const MID_COUNT = midLabelRow.slice(MID_COL_START).filter(c => { const v = c.toString().trim(); return v !== '' && v !== '%'; }).length || 15;
+  let currentCatId = 'res';
+  midItems = Array.from({ length: MID_COUNT }, (_, i) => {
+    const catCell = (catRow[MID_COL_START + i] || '').toString().trim();
+    if (catCell && catNameToId[catCell]) currentCatId = catNameToId[catCell];
     const label = (midLabelRow[MID_COL_START + i] || '').toString().trim();
-    if (label) item.label = label;
+    const existing = window.BIPARTITE_CONSTS.midItems[i];
+    return { id: existing ? existing.id : 'm_' + i, label, catId: currentCatId, w: existing ? existing.w : 25 };
   });
 
-  // ── 2. Update sub-criteria labels + read S/M/W/N values ──────────────────
+  // ── 2. Criteria pcts from "%" col in Relationship Matrix ─────────────────
+  const pctColIdx = midLabelRow.findIndex(c => c.toString().trim() === '%');
+  if (pctColIdx !== -1) {
+    let ci = 0;
+    criteria.forEach(c => {
+      // The pct value is in the first sub row of each category group
+      const firstSubRow = rows[SUB_ROW_START + criteria.slice(0, criteria.indexOf(c)).reduce((s, cr) => s + cr.subs.length, 0)] || [];
+      const val = parseFloat(firstSubRow[pctColIdx]);
+      if (!isNaN(val)) c.pct = val + '%';
+    });
+  }
+
+  // ── 3. Sub-criteria labels + S/M/W/N values ──────────────────────────────
   const allSubs = criteria.flatMap(c => c.subs);
-  const newLinks = [];
-  const newStrengths = [];
+  const newLinks = [], newStrengths = [];
 
   allSubs.forEach((sub, si) => {
     const row = rows[SUB_ROW_START + si] || [];
-
-    // Update sub label from col 1
-    const subLabel = (row[1] || '').toString().trim();
+    const subLabel = (row[MID_COL_START - 1] || '').toString().trim();  // col just before first mid col
     if (subLabel) sub.label = subLabel;
 
-    // Read S/M/W/N values from cols 2–19
     const rowLinks = [], rowStrengths = [];
     for (let i = 0; i < MID_COUNT; i++) {
       const val = (row[MID_COL_START + i] || '').toString().trim().toUpperCase();
@@ -82,28 +117,65 @@ async function loadExcelData() {
   subToMidLinks     = newLinks;
   subToMidStrengths = newStrengths;
 
-  // ── 3. Read mid2right sheet → midToAltLinks ──────────────────────────────
-  const ws2   = wb.Sheets['mid2right'];
+  // ── 3. mid2right sheet → alternative labels + midToAltLinks ──────────────
+  const ws2 = wb.Sheets['mid2right'];
   if (ws2) {
     const rows2 = XLSX.utils.sheet_to_json(ws2, { header: 1, defval: '' });
-    // Row 1 = column index headers (0,1,2…), Row 2 = category label row
-    // Rows 4+ = one alt per row; col A = alt index, col B = alt label, cols C+ = mid values
-    // (matches the image: row 4 → alt 0 Desk Crits, cols C–T → mid 0–17)
-    const MID2_COL_START = 2;   // col C (0-based) = mid item 0
-    const ALT_ROW_START  = 3;   // row 4 in Excel = rows2[3] (0-based)
+    // Dynamically find the first alt row (col A = '0')
+    let ALT_ROW_START = rows2.findIndex(r => r[0] != null && r[0].toString().trim() === '0');
+    if (ALT_ROW_START === -1) ALT_ROW_START = 3;
+    const MID2_COL_START = 2; // col C (0-based)
     const ALT_COUNT      = alternatives.length;
-    const MID2_COUNT     = midItems.length;
 
-    // Build a midIdx → [altIdx, …] map
-    const newMidToAlt = midItems.map(() => []);
-
+    // Find pct column: scan header row for "%" or "R2"; fallback = last non-empty numeric col in alt rows
+    const _hdrRow2 = rows2[ALT_ROW_START - 1] || [];
+    let pctColIdx2 = _hdrRow2.findIndex(c => { const v = c.toString().trim(); return v === '%' || v === 'R2'; });
+    if (pctColIdx2 === -1) {
+      // Fallback: find the last column across alt rows that contains numeric values summing to ~100
+      const altRows = Array.from({ length: ALT_COUNT }, (_, i) => rows2[ALT_ROW_START + i] || []);
+      const maxCol = Math.max(...altRows.map(r => r.length));
+      for (let col = maxCol - 1; col >= MID2_COL_START + MID_COUNT; col--) {
+        const vals = altRows.map(r => parseFloat(r[col])).filter(v => !isNaN(v));
+        if (vals.length === ALT_COUNT) { pctColIdx2 = col; break; }
+      }
+    }
+    // Update alternative labels + pcts
     for (let ai = 0; ai < ALT_COUNT; ai++) {
       const row = rows2[ALT_ROW_START + ai] || [];
-      for (let mi = 0; mi < MID2_COUNT; mi++) {
-        const val = (row[MID2_COL_START + mi] || '').toString().trim().toUpperCase();
-        if (val && val !== 'N') {
-          newMidToAlt[mi].push(ai);
+      const label = (row[1] || '').toString().trim();
+      const pct   = pctColIdx2 !== -1 ? parseFloat(row[pctColIdx2]) : NaN;
+      alternatives[ai] = {
+        ...alternatives[ai],
+        ...(label ? { label } : {}),
+        ...(isNaN(pct) ? {} : { pct: pct + '%' })
+      };
+    }
+
+    // midCategoryHeightPcts from "%" row (col B = '%')
+    const pctRowIdx2 = rows2.findIndex(r => (r[1] || '').toString().trim() === '%');
+    if (pctRowIdx2 !== -1) {
+      const pctRow2 = rows2[pctRowIdx2];
+      const catIds  = ['res', 'des', 'tech', 'comm'];
+      // Find first mi of each category in the rebuilt midItems
+      catIds.forEach(catId => {
+        const firstMi = midItems.findIndex(m => m.catId === catId);
+        if (firstMi !== -1) {
+          const val = parseFloat(pctRow2[MID2_COL_START + firstMi]);
+          if (!isNaN(val)) midCategoryHeightPcts[catId] = val / 100;
         }
+      });
+      // Normalize so they sum to 1
+      const total = Object.values(midCategoryHeightPcts).reduce((s, v) => s + v, 0);
+      if (total > 0) Object.keys(midCategoryHeightPcts).forEach(k => midCategoryHeightPcts[k] /= total);
+    }
+
+    // Build midIdx → [altIdx, …]
+    const newMidToAlt = midItems.map(() => []);
+    for (let ai = 0; ai < ALT_COUNT; ai++) {
+      const row = rows2[ALT_ROW_START + ai] || [];
+      for (let mi = 0; mi < MID_COUNT; mi++) {
+        const val = (row[MID2_COL_START + mi] || '').toString().trim().toUpperCase();
+        if (val && val !== 'N') newMidToAlt[mi].push(ai);
       }
     }
     midToAltLinks = newMidToAlt;
@@ -111,7 +183,11 @@ async function loadExcelData() {
 }
 
 async function loadAndRender() {
-  await loadExcelData();
+  try {
+    await loadExcelData();
+  } catch (e) {
+    console.warn('Excel load failed (likely file:// CORS). Using default data.', e);
+  }
   render();
 }
 
@@ -196,24 +272,22 @@ function buildGeometry() {
   const totalCatGaps = (criteria.length - 1) * L.subCatGap;
   const availableLeftH = L.usableH - totalCatGaps;
 
+  // Compute left category height proportions from live criteria.pct values
+  const totalCatPct = criteria.reduce((s, c) => s + parseFloat(c.pct), 0);
+  const leftCategoryHeightPcts = Object.fromEntries(criteria.map(c => [c.id, parseFloat(c.pct) / totalCatPct]));
+
   let gsi = 0;
   criteria.forEach((c, ci) => {
-    let blockH = 0;
-    if (leftCategoryHeightPcts && leftCategoryHeightPcts[c.id]) {
-      blockH = availableLeftH * leftCategoryHeightPcts[c.id];
-    } else {
-      const grandTotalW = criteria.reduce((sum, cr) => sum + cr.subs.reduce((s, sub) => s + (parseFloat(sub.w) || 0), 0), 0);
-      const catTotalW = c.subs.reduce((s, sub) => s + (parseFloat(sub.w) || 0), 0);
-      blockH = availableLeftH * (catTotalW / Math.max(grandTotalW, 1));
-    }
+    let blockH = availableLeftH * (leftCategoryHeightPcts[c.id] || 1 / criteria.length);
     
     const catSubGaps = (c.subs.length - 1) * L.subGap;
     const catNetH = Math.max(0, blockH - catSubGaps);
-    const catTotalW = c.subs.reduce((s, sub) => s + (parseFloat(sub.w) || 0), 0);
+    const equalSubW = 100 / c.subs.length;
+    const catTotalW = c.subs.reduce((s, sub) => s + (parseFloat(sub.w) || equalSubW), 0);
     const catScale = catNetH / Math.max(catTotalW, 1);
 
     c.subs.forEach((sub) => {
-      const wNum = parseFloat(sub.w) || 0;
+      const wNum = parseFloat(sub.w) || equalSubW;
       const h = Math.max(wNum * catScale, 2);
       subNodes.push({ ...sub, catId: c.id, y: sy, h, midY: sy + h / 2, catIdx: ci, globalIdx: gsi, wNum });
       sy += h + L.subGap;
@@ -278,7 +352,7 @@ function buildGeometry() {
   const subOutOff = new Array(subNodes.length).fill(0);
 
   subNodes.forEach((sn, si) => {
-    const mids = subToMidLinks[si];
+    const mids = subToMidLinks[si] || [];
     mids.forEach((mi, mii) => {
       const srcH = sn.h / mids.length;
       // dstH proportional: mid node height * this sub's share of total incoming to that mid
@@ -293,7 +367,7 @@ function buildGeometry() {
   // ── Alternative incoming weights (from mid flows) ─────────────────────────
   const altInW = new Array(alternatives.length).fill(0);
   midNodes.forEach((mn, mi) => {
-    const alts = midToAltLinks[mi];
+    const alts = midToAltLinks[mi] || [];
     alts.forEach(ai => { altInW[ai] += mn.h / alts.length; });
   });
 
@@ -315,7 +389,7 @@ function buildGeometry() {
   const midOutOff = new Array(midItems.length).fill(0);
 
   midNodes.forEach((mn, mi) => {
-    const alts = midToAltLinks[mi];
+    const alts = midToAltLinks[mi] || [];
     alts.forEach(ai => {
       const srcH = mn.h / alts.length;
       const dstH = altInW[ai] > 0 ? altNodes[ai].h * (srcH / altInW[ai]) : 0;
@@ -340,36 +414,35 @@ function resolveActiveSets() {
   const active = { subs: new Set(), mids: new Set(), alts: new Set(), flows1: new Set(), flows2: new Set(), focused: true };
 
   if (hoverTarget.type === 'sub') {
+    // Left hover: show flows1 only (left → mid), no cascade to right
     const si = hoverTarget.idx;
     active.subs.add(si);
     flows1.forEach((f, i) => {
       if (f.subIdx === si) { active.flows1.add(i); active.mids.add(f.midIdx); }
     });
-    flows2.forEach((f, i) => {
-      if (active.mids.has(f.midIdx)) { active.flows2.add(i); active.alts.add(f.altIdx); }
-    });
 
   } else if (hoverTarget.type === 'mid') {
+    // Mid hover: show both directions
     const mi = hoverTarget.idx;
     active.mids.add(mi);
     flows1.forEach((f, i) => { if (f.midIdx === mi) { active.flows1.add(i); active.subs.add(f.subIdx); } });
     flows2.forEach((f, i) => { if (f.midIdx === mi) { active.flows2.add(i); active.alts.add(f.altIdx); } });
 
   } else if (hoverTarget.type === 'alt') {
+    // Right hover: show flows2 only (mid → right), no cascade to left
     const ai = hoverTarget.idx;
     active.alts.add(ai);
     flows2.forEach((f, i) => { if (f.altIdx === ai) { active.flows2.add(i); active.mids.add(f.midIdx); } });
-    flows1.forEach((f, i) => { if (active.mids.has(f.midIdx)) { active.flows1.add(i); active.subs.add(f.subIdx); } });
 
   } else if (hoverTarget.type === 'cat') {
     const { catId, colType } = hoverTarget;
     if (colType === 'left') {
+      // Left legend: flows1 only
       subNodes.forEach((sn, si) => { if (sn.catId === catId) active.subs.add(si); });
       flows1.forEach((f, i)     => { if (f.catId === catId)  { active.flows1.add(i); active.mids.add(f.midIdx); } });
-      flows2.forEach((f, i)     => { if (active.mids.has(f.midIdx)) { active.flows2.add(i); active.alts.add(f.altIdx); } });
     } else {
+      // Mid legend: flows2 only
       midNodes.forEach((mn, mi) => { if (mn.catId === catId) active.mids.add(mi); });
-      flows1.forEach((f, i)     => { if (active.mids.has(f.midIdx)) { active.flows1.add(i); active.subs.add(f.subIdx); } });
       flows2.forEach((f, i)     => { if (f.catId === catId)  { active.flows2.add(i); active.alts.add(f.altIdx); } });
     }
   }
@@ -442,7 +515,7 @@ function draw() {
     const t = f.strength / maxW; // 0.2 (W) → 0.6 (M) → 1.0 (S)
     const activeAlpha = 0.15 + t * 0.60;         // W≈0.27  M≈0.51  S≈0.75
     const baseAlpha   = 0.06 + t * 0.34;         // faded default: W≈0.13  M≈0.23  S≈0.40
-    const alpha = active.focused ? (show ? activeAlpha : 0.018) : baseAlpha;
+    const alpha = active.focused ? (show ? activeAlpha : 0.08) : baseAlpha;
     drawRibbon(L.col1X + L.nodeW, f.srcY, f.srcH, L.col2X, f.dstY, f.dstH, cc.base, midCatColors[f.midCatId].base, alpha);
   });
 
@@ -450,7 +523,7 @@ function draw() {
   flows2.forEach((f, i) => {
     const cc = midCatColors[f.catId];
     const show = active.flows2.has(i);
-    const alpha = active.focused ? (show ? 0.55 : 0.03) : 0.20;
+    const alpha = active.focused ? (show ? 0.55 : 0.10) : 0.20;
     drawRibbon(L.col2X + L.nodeW, f.srcY, f.srcH, L.col3X, f.dstY, f.dstH, cc.base, alternatives[f.altIdx].color, alpha);
   });
 
@@ -458,7 +531,7 @@ function draw() {
   subNodes.forEach((sn, si) => {
     const cc = catColors[sn.catId];
     const show = active.subs.has(si);
-    const alpha = active.focused ? (show ? 0.9 : 0.08) : 0.9;
+    const alpha = active.focused ? (show ? 0.9 : 0.25) : 0.9;
 
     ctx.fillStyle = cc.base; ctx.globalAlpha = alpha;
     ctx.fillRect(L.col1X, sn.y, L.nodeW, sn.h);
@@ -479,7 +552,7 @@ function draw() {
   midNodes.forEach((mn, mi) => {
     const cc = midCatColors[mn.catId];
     const show = active.mids.has(mi);
-    const alpha = active.focused ? (show ? 0.9 : 0.08) : 0.9;
+    const alpha = active.focused ? (show ? 0.9 : 0.25) : 0.9;
 
     ctx.fillStyle = cc.base; ctx.globalAlpha = alpha;
     ctx.fillRect(L.col2X, mn.y, L.nodeW, mn.h);
@@ -496,7 +569,7 @@ function draw() {
   // ── Alternative nodes (labels on RIGHT, light-black) ──────────────────────
   altNodes.forEach((an, ai) => {
     const show = active.alts.has(ai);
-    const alpha = active.focused ? (show ? 0.9 : 0.1) : 0.9;
+    const alpha = active.focused ? (show ? 0.9 : 0.25) : 0.9;
 
     ctx.fillStyle = an.color; ctx.globalAlpha = alpha;
     ctx.fillRect(L.col3X, an.y, L.nodeW, an.h);
@@ -622,7 +695,7 @@ function updateTooltip(hit, evt) {
     const mn = midNodes[hit.idx];
     const mi = hit.idx;
     const parent = criteria.find(c => c.id === mn.catId);
-    const altsConnected = midToAltLinks[mi].map(ai => alternatives[ai].label).join(', ');
+    const altsConnected = (midToAltLinks[mi] || []).map(ai => alternatives[ai].label).join(', ');
     tip.innerHTML = '<strong>' + mn.label + '</strong>'
       + ' <span style="color:' + catColors[mn.catId].base + '">(' + parent.label + ')</span><br>'
       + 'Connects to: ' + altsConnected;
