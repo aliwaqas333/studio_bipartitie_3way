@@ -243,10 +243,10 @@ function getLayout() {
 
     // vertical gaps
     subGap: 1,    // gap between sub-criteria within a category (left column)
-    subCatGap: 5, // gap between sub-criteria categories (left column)
+    subCatGap: 1, // gap between sub-criteria categories (left column)
     midGap: 1,    // gap between mid items within a category (middle column)
-    midCatGap: 5, // gap between mid item categories (middle column)
-    altGap: 5, // gap between alternatives (right column)
+    midCatGap: 1, // gap between mid item categories (middle column)
+    altGap: 1, // gap between alternatives (right column)
     fonts: {
       header: clamp(width * 0.014, 11, 14),
       legend: clamp(width * 0.012, 10, 13),
@@ -257,8 +257,8 @@ function getLayout() {
     },
     lineGap: clamp(height * 0.017, 6, 16),
     footerY: height - clamp(height * 0.030, 22, 30),  // single footer row
-    titleY:  clamp(height * 0.05, 12, 30) + 10,            // large heading
-    headerY: clamp(height * 0.085, 10, 40) + 27,             // column headers — tighter under title
+    titleY:  40,            // large heading
+    headerY: 65,             // column headers — tighter under title
   };
 }
 
