@@ -93,7 +93,13 @@ async function loadExcelData() {
     });
   }
 
-  // ── 3. Sub-criteria labels + S/M/W/N values ──────────────────────────────
+  // ── 3. Sub-criteria labels + individual% + S/M/W/N values ───────────────
+  // Find "individual %" column (col 19 in Relationship Matrix) — normalize spaces when matching
+  let indPctColIdxLeft = -1;
+  for (let ri = 0; ri < rows.length && indPctColIdxLeft === -1; ri++) {
+    indPctColIdxLeft = (rows[ri] || []).findIndex(c => c.toString().replace(/\s+/g, '').toLowerCase() === 'individual%');
+  }
+
   const allSubs = criteria.flatMap(c => c.subs);
   const newLinks = [], newStrengths = [];
 
@@ -101,6 +107,12 @@ async function loadExcelData() {
     const row = rows[SUB_ROW_START + si] || [];
     const subLabel = (row[MID_COL_START - 1] || '').toString().trim();  // col just before first mid col
     if (subLabel) sub.label = subLabel;
+
+    // Individual height % within its category
+    if (indPctColIdxLeft !== -1) {
+      const val = parseFloat(row[indPctColIdxLeft]);
+      if (!isNaN(val)) sub.w = val;
+    }
 
     const rowLinks = [], rowStrengths = [];
     for (let i = 0; i < MID_COUNT; i++) {
@@ -149,6 +161,16 @@ async function loadExcelData() {
         ...(label ? { label } : {}),
         ...(isNaN(pct) ? {} : { pct: pct + '%' })
       };
+    }
+
+    // individual% for mid items — row where col B = 'individual%'
+    const indPctRowIdx2 = rows2.findIndex(r => (r[1] || '').toString().replace(/\s+/g, '').toLowerCase() === 'individual%');
+    if (indPctRowIdx2 !== -1) {
+      const indRow = rows2[indPctRowIdx2];
+      midItems.forEach((item, mi) => {
+        const val = parseFloat(indRow[MID2_COL_START + mi]);
+        if (!isNaN(val)) item.w = val;
+      });
     }
 
     // midCategoryHeightPcts from "%" row (col B = '%')
@@ -229,10 +251,10 @@ function getLayout() {
   canvas.style.height = height + 'px';
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  const titleY    = height * 0.065 + 5;                  // title sits at ~4.5% of height
-  const headerY   = height * 0.098;                  // column headers just above figure
-  const topPad    = height * 0.105;                  // figure starts at ~10.5%
-  const bottomPad = 40;                   // space for single footer row
+  const titleY    = height * 0.035;                  // title sits at ~4.5% of height
+  const headerY   = height * 0.048;                  // column headers just above figure
+  const topPad    = height * 0.05;                  // figure starts at ~10.5%
+  const bottomPad = height * 0.06;                   // space for single footer row
   const usableH   = height - topPad - bottomPad;
 
   return {
@@ -516,7 +538,7 @@ function draw() {
     const show = active.flows1.has(i);
     const t = f.strength / maxW; // 0.2 (W) → 0.6 (M) → 1.0 (S)
     const activeAlpha = 0.15 + t * 0.60;         // W≈0.27  M≈0.51  S≈0.75
-    const baseAlpha   = 0.06 + t * 0.34;         // faded default: W≈0.13  M≈0.23  S≈0.40
+    const baseAlpha   = 0.30;                     // flat opacity in default state
     const alpha = active.focused ? (show ? activeAlpha : 0.08) : baseAlpha;
     drawRibbon(L.col1X + L.nodeW, f.srcY, f.srcH, L.col2X, f.dstY, f.dstH, cc.base, midCatColors[f.midCatId].base, alpha);
   });
