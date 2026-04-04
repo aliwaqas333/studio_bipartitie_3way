@@ -18,6 +18,16 @@ const {
   weights,
 } = window.BIPARTITE_CONSTS;
 
+const title = {
+  text:"",
+}
+
+const columnHeader = {
+  left: 'Methods',
+  middle: 'Learning outcomes',
+  right: 'Critiques'
+};
+
 // These start from consts but are overwritten at runtime from Excel
 let midItems             = window.BIPARTITE_CONSTS.midItems.map(x => ({ ...x }));
 let alternatives         = window.BIPARTITE_CONSTS.alternatives.map(x => ({ ...x }));
@@ -59,21 +69,46 @@ async function loadExcelData() {
   const ws   = wb.Sheets['Relationship Matrix'];
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
 
-  const wMap = { S: weights.S, M: weights.M, W: weights.W, N: 0 };
-  const catNameToId = { 'Process': 'res', 'Qualitative': 'des', 'Quantitative': 'tech', 'Representation': 'comm' };
+  // first update title which is rows[0][0]
+  if (rows[0] && rows[0][0]) title.text = rows[0][0].toString().trim();
 
-  // Dynamically find the category header row (contains "Process")
-  let catRowIdx = rows.findIndex(r => r.some(c => c.toString().trim() === 'Process'));
+
+  const wMap = { S: weights.S, M: weights.M, W: weights.W, N: 0 };
+  // get cat names from D4, H4, L4, O4 without using find.
+  // value at D4 cell fetch
+  // idx_jump is based on number of items in category
+  const idx_jump = [2,6,10,13];
+  const catNameToId = {}; // mid cols
+  ['res', 'des', 'tech', 'comm'].forEach((id, i) => {
+    const val = (rows[1][idx_jump[i]] || '').toString().trim();
+    if (val) catNameToId[val] = id;
+  });
+
+  criterJumpIndex = [3, 6, 10, 14]; // based on number of items in each category
+  const criteriacatNameToId = {};
+  ['res', 'des', 'tech', 'comm'].forEach((id, i) => {
+    const val = (rows[criterJumpIndex[i]][0] || '').toString().trim();
+    if (val) criteriacatNameToId[val] = id;
+  });
+
+  const findkey = Object.keys(catNameToId).find(k => catNameToId[k] === 'res');
+   
+  // const catNameToId = { 'Pa4rti4': 'res', 'Qualitative': 'des', 'Quantitative': 'tech', 'Representation': 'comm' };
+
+  // Dynamically find the category header row
+  let catRowIdx = rows.findIndex(r => r.some(c => c.toString().trim() === findkey));
+  console.log('Category row index:', catRowIdx);
   if (catRowIdx === -1) catRowIdx = 3; // fallback
   const midLabelRowIdx = catRowIdx + 1;
   const SUB_ROW_START  = catRowIdx + 2;
 
-  // Find first mid item column (first col in category row that has "Process")
+  // 
   const catRow      = rows[catRowIdx] || [];
   const midLabelRow = rows[midLabelRowIdx] || [];
-  const MID_COL_START = catRow.findIndex(c => c.toString().trim() === 'Process');
+  const MID_COL_START = catRow.findIndex(c => c.toString().trim() === findkey);
   const MID_COUNT = midLabelRow.slice(MID_COL_START).filter(c => { const v = c.toString().replace(/\s+/g,'').toLowerCase(); return v !== '' && v !== '%' && v !== 'individual%'; }).length || 15;
   let currentCatId = 'res';
+
   midItems = Array.from({ length: MID_COUNT }, (_, i) => {
     const catCell = (catRow[MID_COL_START + i] || '').toString().trim();
     if (catCell && catNameToId[catCell]) currentCatId = catNameToId[catCell];
@@ -81,6 +116,13 @@ async function loadExcelData() {
     const existing = window.BIPARTITE_CONSTS.midItems[i];
     return { id: existing ? existing.id : 'm_' + i, label, catId: currentCatId, w: existing ? existing.w : 25 };
   });
+
+  // need to update midCatColors labels based on catNameToId keys
+  Object.keys(midCatColors).forEach(catId => {
+    const catName = Object.keys(catNameToId).find(k => catNameToId[k] === catId);
+    if (catName) midCatColors[catId].label = catName;
+  });
+
 
   // ── 2. Criteria pcts from "%" col in Relationship Matrix ─────────────────
   const pctColIdx = midLabelRow.findIndex(c => c.toString().trim() === '%');
@@ -93,6 +135,12 @@ async function loadExcelData() {
       if (!isNaN(val)) c.pct = val + '%';
     });
   }
+
+  // update criter labels using the catnameToId keys
+  criteria.forEach(c => {
+    const catName = Object.keys(criteriacatNameToId).find(k => criteriacatNameToId[k] === c.id);
+    if (catName) c.label = catName;
+  });
 
   // ── 3. Sub-criteria labels + individual% + S/M/W/N values ───────────────
   // Find "individual %" column (col 19 in Relationship Matrix) — normalize spaces when matching
@@ -163,6 +211,22 @@ async function loadExcelData() {
         ...(isNaN(pct) ? {} : { pct: pct + '%' })
       };
     }
+
+    // configs
+    const ws3 = wb.Sheets['configs'];
+    const rows3 = XLSX.utils.sheet_to_json(ws3, { header: 1, defval: '' });
+
+    // first update title which is rows[0][0]
+    if (rows3[0][1]) title.text = rows3[0][1].toString().trim();
+
+    // columnHeader values from configs sheet (row where col A = 'columnHeader')
+    const colHdrRowIdx = 1;
+    columnHeader.left = (rows3[colHdrRowIdx][1] || '').toString().trim();
+    columnHeader.middle = (rows3[colHdrRowIdx][2] || '').toString().trim();
+    columnHeader.right = (rows3[colHdrRowIdx][3] || '').toString().trim();
+    
+
+
 
     // individual% for mid items — row where col B = 'individual%'
     const indPctRowIdx2 = rows2.findIndex(r => (r[1] || '').toString().replace(/\s+/g, '').toLowerCase() === 'individual%');
@@ -531,15 +595,15 @@ function draw() {
   // ── Title ─────────────────────────────────────────────────────────────────
   ctx.font = '700 ' + clamp(L.W * 0.026, 20, 24) + 'px ' + fontFamily;
   ctx.fillStyle = '#000000'; ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'center';
-  outlineText('Studio Pedagogy', (L.col1X + L.col3X) / 2 + 10, L.titleY);
+  outlineText(title.text, (L.col1X + L.col3X) / 2 + 10, L.titleY);
 
   // ── Column headers ────────────────────────────────────────────────────────
   ctx.font = '400 ' + L.fonts.header + 'px ' + fontFamily;
   ctx.fillStyle = '#000000'; ctx.textBaseline = 'alphabetic';
   const hOff = 8; // nudge headers slightly right to visually center over content
-  ctx.textAlign = 'center'; outlineText('Methods', L.col1X + hOff, L.headerY);
-  ctx.textAlign = 'center'; outlineText('Learning outcomes', L.col2X + hOff, L.headerY);
-  ctx.textAlign = 'center'; outlineText('Critiques', L.col3X + hOff, L.headerY);
+  ctx.textAlign = 'center'; outlineText(columnHeader.left, L.col1X + hOff, L.headerY);
+  ctx.textAlign = 'center'; outlineText(columnHeader.middle, L.col2X + hOff, L.headerY);
+  ctx.textAlign = 'center'; outlineText(columnHeader.right, L.col3X + hOff, L.headerY);
 
   // ── Flows1: sub → mid (alpha scales proportionally with weights: W=1, M=3, S=5) ─
   const maxW = weights ? weights.S : 5;
