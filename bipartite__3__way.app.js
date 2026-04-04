@@ -71,7 +71,7 @@ async function loadExcelData() {
   const catRow      = rows[catRowIdx] || [];
   const midLabelRow = rows[midLabelRowIdx] || [];
   const MID_COL_START = catRow.findIndex(c => c.toString().trim() === 'Process');
-  const MID_COUNT = midLabelRow.slice(MID_COL_START).filter(c => { const v = c.toString().trim(); return v !== '' && v !== '%'; }).length || 15;
+  const MID_COUNT = midLabelRow.slice(MID_COL_START).filter(c => { const v = c.toString().replace(/\s+/g,'').toLowerCase(); return v !== '' && v !== '%' && v !== 'individual%'; }).length || 15;
   let currentCatId = 'res';
   midItems = Array.from({ length: MID_COUNT }, (_, i) => {
     const catCell = (catRow[MID_COL_START + i] || '').toString().trim();
@@ -538,7 +538,7 @@ function draw() {
     const show = active.flows1.has(i);
     const t = f.strength / maxW; // 0.2 (W) → 0.6 (M) → 1.0 (S)
     const activeAlpha = 0.15 + t * 0.60;         // W≈0.27  M≈0.51  S≈0.75
-    const baseAlpha   = 0.30;                     // flat opacity in default state
+    const baseAlpha   = 0.06 + t * 0.34;         // faded default: W≈0.13  M≈0.23  S≈0.40
     const alpha = active.focused ? (show ? activeAlpha : 0.08) : baseAlpha;
     drawRibbon(L.col1X + L.nodeW, f.srcY, f.srcH, L.col2X, f.dstY, f.dstH, cc.base, midCatColors[f.midCatId].base, alpha);
   });
