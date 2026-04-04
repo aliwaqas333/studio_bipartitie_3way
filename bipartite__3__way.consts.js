@@ -54,11 +54,11 @@
 
   // Labels and pcts come from Excel — colors are defined here
   const alternatives = [
-    { label: '', pct: '40%', color: '#252525' },
-    { label: '', pct: '20%', color: '#323232' },
-    { label: '', pct: '20%', color: '#555555' },
-    { label: '', pct: '20%', color: '#808080' },
-    { label: '', pct: '20%', color: '#bbbbbb' },
+    { label: '', pct: '40%', color: '#4A452A' },
+    { label: '', pct: '20%', color: '#948A54' },
+    { label: '', pct: '20%', color: '#C4BD97' },
+    { label: '', pct: '20%', color: '#DDD9C3' },
+    { label: '', pct: '20%', color: '#EEECE1' },
   ];
 
   // Labels and catIds come from Excel — only id and weight kept here
