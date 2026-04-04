@@ -36,6 +36,14 @@
 
   const weights = { S: 5, M: 3, W: 1, N: 0 };
 
+  // Column positions as fraction of canvas width (0–1)
+  // col1X = left column (Methods), col2X = middle (Learning outcomes), col3X = right (Critiques)
+  const layout = {
+    col1X: 0.25,
+    col2X: 0.50,
+    col3X: 0.75,
+  };
+
   // Labels and pcts come from Excel — sub count is structural (must match Excel rows)
   const criteria = [
     { id: 'res',  label: 'Research',      pct: '25%', subs: [ {}, {}, {} ] },
@@ -73,6 +81,6 @@
     bg, txtP, txtS, headerC, altTxtC,
     catColors, midCatColors,
     criteria, alternatives, midItems, midToAltLinks,
-    midCategoryHeightPcts
+    midCategoryHeightPcts, layout
   };
 })();

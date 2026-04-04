@@ -229,15 +229,17 @@ function getLayout() {
   canvas.style.height = height + 'px';
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  const topPad    = clamp(height * 0.095, 76, 90); // tighter gap between title and figure
-  const bottomPad = clamp(height * 0.07, 48, 60);   // space for single footer row
+  const titleY    = height * 0.065;                  // title sits at ~4.5% of height
+  const headerY   = height * 0.098;                  // column headers just above figure
+  const topPad    = height * 0.105;                  // figure starts at ~10.5%
+  const bottomPad = height * 0.06;                   // space for single footer row
   const usableH   = height - topPad - bottomPad;
 
   return {
     W: width, H: height, topPad, bottomPad, usableH,
-    col1X: width * 0.20,   // sub-criteria  — labels LEFT (right-aligned)
-    col2X: width * 0.50,   // middle items  — labels RIGHT (left-aligned, short)
-    col3X: width * 0.80,   // alternatives  — labels RIGHT (left-aligned)
+    col1X: width * window.BIPARTITE_CONSTS.layout.col1X,  // sub-criteria  — labels LEFT
+    col2X: width * window.BIPARTITE_CONSTS.layout.col2X,  // middle items  — labels RIGHT
+    col3X: width * window.BIPARTITE_CONSTS.layout.col3X,  // alternatives  — labels RIGHT
     nodeW: clamp(width * 0.014, 10, 16),
     labelPad: clamp(width * 0.009, 6, 12),
 
@@ -256,9 +258,9 @@ function getLayout() {
       pct:    clamp(width * 0.0095,  8, 10)
     },
     lineGap: clamp(height * 0.017, 6, 16),
-    footerY: height - clamp(height * 0.030, 22, 30),  // single footer row
-    titleY:  40,            // large heading
-    headerY: 65,             // column headers — tighter under title
+    footerY: height - height * 0.030,  // single footer row
+    titleY,
+    headerY,
   };
 }
 
