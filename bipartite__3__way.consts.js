@@ -54,7 +54,7 @@
 
   // Labels and pcts come from Excel — colors are defined here
   const alternatives = [
-    { label: '', pct: '40%', color: '#4A452A' },
+    { label: '', pct: '40%', color: '#79724f' },
     { label: '', pct: '20%', color: '#948A54' },
     { label: '', pct: '20%', color: '#C4BD97' },
     { label: '', pct: '20%', color: '#DDD9C3' },
