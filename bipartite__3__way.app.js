@@ -229,10 +229,10 @@ function getLayout() {
   canvas.style.height = height + 'px';
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  const titleY    = height * 0.065;                  // title sits at ~4.5% of height
+  const titleY    = height * 0.065 + 5;                  // title sits at ~4.5% of height
   const headerY   = height * 0.098;                  // column headers just above figure
   const topPad    = height * 0.105;                  // figure starts at ~10.5%
-  const bottomPad = height * 0.06;                   // space for single footer row
+  const bottomPad = 40;                   // space for single footer row
   const usableH   = height - topPad - bottomPad;
 
   return {
