@@ -54,12 +54,20 @@
 
   // Labels and pcts come from Excel — colors are defined here
   const alternatives = [
-    { label: '', pct: '40%', color: '#79724f' },
-    { label: '', pct: '20%', color: '#948A54' },
-    { label: '', pct: '20%', color: '#C4BD97' },
+    { label: '', pct: '40%', color: '#EEECE1' },
     { label: '', pct: '20%', color: '#DDD9C3' },
-    { label: '', pct: '20%', color: '#EEECE1' },
+    { label: '', pct: '20%', color: '#C4BD97' },
+    { label: '', pct: '20%', color: '#948A54' },
+    { label: '', pct: '20%', color: '#79724f' },
   ];
+
+  //   const alternatives = [
+  //   { label: '', pct: '40%', color: '#79724f' },
+  //   { label: '', pct: '20%', color: '#948A54' },
+  //   { label: '', pct: '20%', color: '#C4BD97' },
+  //   { label: '', pct: '20%', color: '#DDD9C3' },
+  //   { label: '', pct: '20%', color: '#EEECE1' },
+  // ];
 
   // Labels and catIds come from Excel — only id and weight kept here
   const midItems = [
