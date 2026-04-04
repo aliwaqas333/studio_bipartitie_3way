@@ -219,6 +219,26 @@ async function loadExcelData() {
     // first update title which is rows[0][0]
     if (rows3[0][1]) title.text = rows3[0][1].toString().trim();
 
+    // colors for catColors
+    Object.keys(catColors).forEach((id, i) => {
+      let val = (rows3[2][i + 1] || '').toString().trim();
+      if (val) catColors[id].base = `#${val}`;
+    });
+
+    // colors for midCatColors
+    ['res', 'des', 'tech', 'comm'].forEach((id, i) => {
+      let val = (rows3[3][i + 1] || '').toString().trim();
+      if (val) midCatColors[id].base = `#${val}`;
+    });
+
+    // colors for alternatives
+    Object.keys(alternatives).forEach((key, i) => {
+      let val = (rows3[4][i + 1] || '').toString().trim();
+      if (val) alternatives[key].color = `#${val}`;
+    });
+
+
+
     // columnHeader values from configs sheet (row where col A = 'columnHeader')
     const colHdrRowIdx = 1;
     columnHeader.left = (rows3[colHdrRowIdx][1] || '').toString().trim();
