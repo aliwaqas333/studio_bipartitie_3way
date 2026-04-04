@@ -22,6 +22,7 @@ const {
 let midItems             = window.BIPARTITE_CONSTS.midItems.map(x => ({ ...x }));
 let alternatives         = window.BIPARTITE_CONSTS.alternatives.map(x => ({ ...x }));
 let midToAltLinks        = window.BIPARTITE_CONSTS.midToAltLinks;
+let midToAltStrengths    = []; // parallel to midToAltLinks — strength per (mid, alt) pair
 let midCategoryHeightPcts = { ...window.BIPARTITE_CONSTS.midCategoryHeightPcts };
 
 // These are populated dynamically from the Excel file at runtime
@@ -191,16 +192,21 @@ async function loadExcelData() {
       if (total > 0) Object.keys(midCategoryHeightPcts).forEach(k => midCategoryHeightPcts[k] /= total);
     }
 
-    // Build midIdx → [altIdx, …]
+    // Build midIdx → [altIdx, …] and midIdx → [strength, …]
     const newMidToAlt = midItems.map(() => []);
+    const newMidToAltStr = midItems.map(() => []);
     for (let ai = 0; ai < ALT_COUNT; ai++) {
       const row = rows2[ALT_ROW_START + ai] || [];
       for (let mi = 0; mi < MID_COUNT; mi++) {
         const val = (row[MID2_COL_START + mi] || '').toString().trim().toUpperCase();
-        if (val && val !== 'N') newMidToAlt[mi].push(ai);
+        if (val && val !== 'N') {
+          newMidToAlt[mi].push(ai);
+          newMidToAltStr[mi].push(wMap[val] ?? weights.W);
+        }
       }
     }
-    midToAltLinks = newMidToAlt;
+    midToAltLinks     = newMidToAlt;
+    midToAltStrengths = newMidToAltStr;
   }
 }
 
@@ -251,10 +257,12 @@ function getLayout() {
   canvas.style.height = height + 'px';
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  const titleY    = height * 0.035;                  // title sits at ~4.5% of height
-  const headerY   = height * 0.048;                  // column headers just above figure
-  const topPad    = height * 0.05;                  // figure starts at ~10.5%
-  const bottomPad = height * 0.06;                   // space for single footer row
+  const margin     = height * 0.040;                 // equal whitespace above title and below legend
+  const titleFontH = height * 0.022;                 // cap-height offset (~70% of em) for baseline
+  const titleY     = margin + titleFontH;            // visual top of title sits at margin from top
+  const topPad     = height * 0.115;                 // figure starts here
+  const headerY    = topPad - height * 0.014;        // column headers tight above figure
+  const bottomPad  = height * 0.07;                  // space for single footer row
   const usableH   = height - topPad - bottomPad;
 
   return {
@@ -280,7 +288,7 @@ function getLayout() {
       pct:    clamp(width * 0.0095,  8, 10)
     },
     lineGap: clamp(height * 0.017, 6, 16),
-    footerY: height - height * 0.030,  // single footer row
+    footerY: height - margin,           // visual bottom of legend sits at margin from bottom
     titleY,
     headerY,
   };
@@ -414,10 +422,12 @@ function buildGeometry() {
 
   midNodes.forEach((mn, mi) => {
     const alts = midToAltLinks[mi] || [];
-    alts.forEach(ai => {
+    const strs = midToAltStrengths[mi] || [];
+    alts.forEach((ai, aii) => {
       const srcH = mn.h / alts.length;
       const dstH = altInW[ai] > 0 ? altNodes[ai].h * (srcH / altInW[ai]) : 0;
-      flows2.push({ srcY: mn.y + midOutOff[mi], srcH, dstY: altNodes[ai].y + altInOff2[ai], dstH, catId: mn.catId, midIdx: mi, altIdx: ai });
+      const strength = strs[aii] ?? weights.W;
+      flows2.push({ srcY: mn.y + midOutOff[mi], srcH, dstY: altNodes[ai].y + altInOff2[ai], dstH, catId: mn.catId, midIdx: mi, altIdx: ai, strength });
       midOutOff[mi] += srcH;
       altInOff2[ai] += dstH;
     });
@@ -547,7 +557,10 @@ function draw() {
   flows2.forEach((f, i) => {
     const cc = midCatColors[f.catId];
     const show = active.flows2.has(i);
-    const alpha = active.focused ? (show ? 0.55 : 0.10) : 0.20;
+    const t = (f.strength ?? weights.W) / (weights.S ?? 5);
+    const activeAlpha = 0.15 + t * 0.60;
+    const baseAlpha   = 0.06 + t * 0.34;
+    const alpha = active.focused ? (show ? activeAlpha : 0.10) : baseAlpha;
     drawRibbon(L.col2X + L.nodeW, f.srcY, f.srcH, L.col3X, f.dstY, f.dstH, cc.base, alternatives[f.altIdx].color, alpha);
   });
 
