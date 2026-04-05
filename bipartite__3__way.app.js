@@ -595,62 +595,109 @@ function drawRibbon(x1, y1, h1, x2, y2, h2, colorL, colorR, alpha) {
 }
 
 // ── Left-side stats panel ────────────────────────────────────────────────
-// Default state (nothing hovered): CATEGORY=100%, IMPACT RANK=---,
-// CONNECTIONS=totals across all sub→mid links.
-// Hover state (a left sub hovered): CATEGORY=that sub's % of the whole
-// Methods column, IMPACT RANK=rank by score (S=3, M=2, W=1) within its
-// column, CONNECTIONS=that sub's own S/M/(W+N) counts.
+// Works for hover on any column:
+//   • left sub   → flows1 (sub→mid), ranked among all subs
+//   • middle mid → flows1 (sub→mid) + flows2 (mid→alt), ranked among all mids
+//   • right alt  → flows2 (mid→alt), ranked among all alts
+// Score per item: 3·S + 2·M + 1·W over its attached links.
+// "No" = (max possible links on that node) − links of any strength.
+// Default (nothing hovered): shows totals across the LEFT column.
 function computeStatsData() {
   const S = weights.S, M = weights.M, W = weights.W;
-  // Per-sub score and S/M/W/N counts
-  const perSub = subNodes.map((sn, si) => {
-    let sC = 0, mC = 0, wC = 0;
-    flows1.forEach(f => {
-      if (f.subIdx !== si) return;
-      if (f.strength === S)      sC++;
-      else if (f.strength === M) mC++;
-      else if (f.strength === W) wC++;
-    });
-    const nC = Math.max(0, midNodes.length - (sC + mC + wC));
-    const score = 3 * sC + 2 * mC + 1 * wC;
-    return { si, sC, mC, wC, nC, score };
-  });
-  // Rank by score descending (standard competition rank: ties share rank)
-  const sorted = [...perSub].sort((a, b) => b.score - a.score);
-  const rankById = {};
-  let lastScore = null, lastRank = 0;
-  sorted.forEach((r, i) => {
-    if (r.score !== lastScore) { lastRank = i + 1; lastScore = r.score; }
-    rankById[r.si] = lastRank;
-  });
 
-  // Totals across entire left column
-  const totals = perSub.reduce(
+  function bucket(strength, a) {
+    if      (strength === S) a.sC++;
+    else if (strength === M) a.mC++;
+    else if (strength === W) a.wC++;
+  }
+  const scoreOf = a => 3 * a.sC + 2 * a.mC + 1 * a.wC;
+
+  // Standard competition ranking (ties share a rank)
+  function rankItems(items) {
+    const sorted = [...items].sort((a, b) => b.score - a.score);
+    const byIdx = {};
+    let lastScore = null, lastRank = 0;
+    sorted.forEach((r, i) => {
+      if (r.score !== lastScore) { lastRank = i + 1; lastScore = r.score; }
+      byIdx[r.idx] = lastRank;
+    });
+    return byIdx;
+  }
+
+  // Per-sub (left column)
+  const perSub = subNodes.map((sn, si) => {
+    const a = { sC: 0, mC: 0, wC: 0 };
+    flows1.forEach(f => { if (f.subIdx === si) bucket(f.strength, a); });
+    const nC = Math.max(0, midNodes.length - (a.sC + a.mC + a.wC));
+    return { idx: si, ...a, nC, score: scoreOf(a) };
+  });
+  const subRank = rankItems(perSub);
+
+  // Per-mid (middle column) — combines inbound (from subs) and outbound (to alts)
+  const perMid = midNodes.map((mn, mi) => {
+    const a = { sC: 0, mC: 0, wC: 0 };
+    flows1.forEach(f => { if (f.midIdx === mi) bucket(f.strength, a); });
+    flows2.forEach(f => { if (f.midIdx === mi) bucket(f.strength ?? W, a); });
+    const maxLinks = subNodes.length + altNodes.length;
+    const nC = Math.max(0, maxLinks - (a.sC + a.mC + a.wC));
+    return { idx: mi, ...a, nC, score: scoreOf(a) };
+  });
+  const midRank = rankItems(perMid);
+
+  // Per-alt (right column)
+  const perAlt = altNodes.map((an, ai) => {
+    const a = { sC: 0, mC: 0, wC: 0 };
+    flows2.forEach(f => { if (f.altIdx === ai) bucket(f.strength ?? W, a); });
+    const nC = Math.max(0, midNodes.length - (a.sC + a.mC + a.wC));
+    return { idx: ai, ...a, nC, score: scoreOf(a) };
+  });
+  const altRank = rankItems(perAlt);
+
+  const sumB = arr => arr.reduce(
     (acc, r) => ({ sC: acc.sC + r.sC, mC: acc.mC + r.mC, wC: acc.wC + r.wC, nC: acc.nC + r.nC }),
     { sC: 0, mC: 0, wC: 0, nC: 0 }
   );
 
-  const hovered = (hoverTarget.type === 'sub') ? perSub[hoverTarget.idx] : null;
+  // Pick the active column / record / rank based on hoverTarget
+  let column = 'sub';
+  let record = null;
+  let rank   = null;
+  let totalRanks = perSub.length;
+  let nodes  = subNodes;
 
-  // Category weight: hovered sub's height as % of the whole left column
-  let categoryPct = 100;
-  let categoryLabel = '';
-  if (hovered) {
-    const sn = subNodes[hovered.si];
-    const totalH = subNodes.reduce((s, n) => s + n.h, 0);
-    categoryPct = totalH > 0 ? (sn.h / totalH) * 100 : 0;
+  if (hoverTarget.type === 'sub' && perSub[hoverTarget.idx]) {
+    column = 'sub'; record = perSub[hoverTarget.idx]; rank = subRank[record.idx];
+    totalRanks = perSub.length; nodes = subNodes;
+  } else if (hoverTarget.type === 'mid' && perMid[hoverTarget.idx]) {
+    column = 'mid'; record = perMid[hoverTarget.idx]; rank = midRank[record.idx];
+    totalRanks = perMid.length; nodes = midNodes;
+  } else if (hoverTarget.type === 'alt' && perAlt[hoverTarget.idx]) {
+    column = 'alt'; record = perAlt[hoverTarget.idx]; rank = altRank[record.idx];
+    totalRanks = perAlt.length; nodes = altNodes;
   }
 
-  return {
-    hovered,
-    categoryPct,
-    categoryLabel,
-    rank: hovered ? rankById[hovered.si] : null,
-    totalRanks: perSub.length,
-    conn: hovered
-      ? { yes: hovered.sC, maybe: hovered.mC, no: hovered.wC + hovered.nC }
-      : { yes: totals.sC, maybe: totals.mC, no: totals.wC + totals.nC },
-  };
+  // Category % = hovered node's height / total column height
+  let categoryPct = 100;
+  if (record) {
+    const node = nodes[record.idx];
+    const totalH = nodes.reduce((s, n) => s + n.h, 0);
+    categoryPct = totalH > 0 ? (node.h / totalH) * 100 : 0;
+  }
+
+  // Connections: hovered record's own counts, otherwise totals for default column
+  const totals = column === 'mid' ? sumB(perMid)
+              : column === 'alt' ? sumB(perAlt)
+              : sumB(perSub);
+  const conn = record
+    ? { yes: record.sC, maybe: record.mC, no: record.wC + record.nC }
+    : { yes: totals.sC, maybe: totals.mC, no: totals.wC + totals.nC };
+
+  // "of Methods / Learning outcomes / Critiques"
+  const colLabel = column === 'mid' ? columnHeader.middle
+                 : column === 'alt' ? columnHeader.right
+                 : columnHeader.left;
+
+  return { hovered: record, categoryPct, rank, totalRanks, conn, colLabel };
 }
 
 function ordinalSuffix(n) {
@@ -695,7 +742,7 @@ function drawStatsPanel(L, fontFamily, outlineText) {
     if (data.hovered) {
       const bigW = ctx.measureText(pctText).width;
       ctx.font = subFont;
-      outlineText(' of Methods', px + bigW + 4, bigY);
+      outlineText(' of ' + (data.colLabel || ''), px + bigW + 4, bigY);
     }
   }
 
