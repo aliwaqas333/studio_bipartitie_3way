@@ -594,6 +594,155 @@ function drawRibbon(x1, y1, h1, x2, y2, h2, colorL, colorR, alpha) {
   ctx.fill();
 }
 
+// ── Left-side stats panel ────────────────────────────────────────────────
+// Default state (nothing hovered): CATEGORY=100%, IMPACT RANK=---,
+// CONNECTIONS=totals across all sub→mid links.
+// Hover state (a left sub hovered): CATEGORY=that sub's % of the whole
+// Methods column, IMPACT RANK=rank by score (S=3, M=2, W=1) within its
+// column, CONNECTIONS=that sub's own S/M/(W+N) counts.
+function computeStatsData() {
+  const S = weights.S, M = weights.M, W = weights.W;
+  // Per-sub score and S/M/W/N counts
+  const perSub = subNodes.map((sn, si) => {
+    let sC = 0, mC = 0, wC = 0;
+    flows1.forEach(f => {
+      if (f.subIdx !== si) return;
+      if (f.strength === S)      sC++;
+      else if (f.strength === M) mC++;
+      else if (f.strength === W) wC++;
+    });
+    const nC = Math.max(0, midNodes.length - (sC + mC + wC));
+    const score = 3 * sC + 2 * mC + 1 * wC;
+    return { si, sC, mC, wC, nC, score };
+  });
+  // Rank by score descending (standard competition rank: ties share rank)
+  const sorted = [...perSub].sort((a, b) => b.score - a.score);
+  const rankById = {};
+  let lastScore = null, lastRank = 0;
+  sorted.forEach((r, i) => {
+    if (r.score !== lastScore) { lastRank = i + 1; lastScore = r.score; }
+    rankById[r.si] = lastRank;
+  });
+
+  // Totals across entire left column
+  const totals = perSub.reduce(
+    (acc, r) => ({ sC: acc.sC + r.sC, mC: acc.mC + r.mC, wC: acc.wC + r.wC, nC: acc.nC + r.nC }),
+    { sC: 0, mC: 0, wC: 0, nC: 0 }
+  );
+
+  const hovered = (hoverTarget.type === 'sub') ? perSub[hoverTarget.idx] : null;
+
+  // Category weight: hovered sub's height as % of the whole left column
+  let categoryPct = 100;
+  let categoryLabel = '';
+  if (hovered) {
+    const sn = subNodes[hovered.si];
+    const totalH = subNodes.reduce((s, n) => s + n.h, 0);
+    categoryPct = totalH > 0 ? (sn.h / totalH) * 100 : 0;
+  }
+
+  return {
+    hovered,
+    categoryPct,
+    categoryLabel,
+    rank: hovered ? rankById[hovered.si] : null,
+    totalRanks: perSub.length,
+    conn: hovered
+      ? { yes: hovered.sC, maybe: hovered.mC, no: hovered.wC + hovered.nC }
+      : { yes: totals.sC, maybe: totals.mC, no: totals.wC + totals.nC },
+  };
+}
+
+function ordinalSuffix(n) {
+  const s = ['th', 'st', 'nd', 'rd'], v = n % 100;
+  return s[(v - 20) % 10] || s[v] || s[0];
+}
+
+function drawStatsPanel(L, fontFamily, outlineText) {
+  const cfg = window.BIPARTITE_CONSTS.layout;
+  const px = L.W * (cfg.statsPanelX ?? 0.04);
+  const pw = L.W * (cfg.statsPanelW ?? 0.26);
+  const data = computeStatsData();
+
+  // Vertical rhythm: 3 sections spanning the figure's vertical band
+  const topY    = L.topPad;
+  const bottomY = L.H - L.H * 0.11; // just above the footer
+  const bandH   = bottomY - topY;
+  const sectionH = bandH / 3;
+
+  const labelFont = '400 ' + clamp(L.W * 0.0105, 11, 14) + 'px ' + fontFamily;
+  const bigFont   = '100 ' + clamp(L.W * 0.055, 38, 72) + 'px ' + fontFamily;
+  const subFont   = '300 ' + clamp(L.W * 0.011, 10, 13) + 'px ' + fontFamily;
+  const connNum   = '300 ' + clamp(L.W * 0.013, 12, 16) + 'px ' + fontFamily;
+  const connLbl   = '300 ' + clamp(L.W * 0.011, 10, 13) + 'px ' + fontFamily;
+
+  ctx.fillStyle = '#000000';
+  ctx.globalAlpha = 1;
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'left';
+
+  // ── Section 1: CATEGORY ──────────────────────────────────────────────────
+  {
+    const sy = topY + sectionH * 0.30;
+    ctx.font = labelFont;
+    outlineText('CATEGORY', px, sy);
+
+    const bigY = sy + clamp(L.W * 0.052, 48, 80);
+    ctx.font = bigFont;
+    const pctText = Math.round(data.categoryPct) + '%';
+    outlineText(pctText, px, bigY);
+
+    if (data.hovered) {
+      const bigW = ctx.measureText(pctText).width;
+      ctx.font = subFont;
+      outlineText(' of Methods', px + bigW + 4, bigY);
+    }
+  }
+
+  // ── Section 2: IMPACT RANK ───────────────────────────────────────────────
+  {
+    const sy = topY + sectionH * 1.30;
+    ctx.font = labelFont;
+    outlineText('IMPACT RANK', px, sy);
+
+    const bigY = sy + clamp(L.W * 0.052, 48, 72);
+    ctx.font = bigFont;
+    if (data.rank == null) {
+      // Two dashes placeholder
+      outlineText('—', px, bigY);
+    } else {
+      const numText = String(data.rank);
+      outlineText(numText, px, bigY);
+      const numW = ctx.measureText(numText).width;
+      ctx.font = subFont;
+      outlineText(ordinalSuffix(data.rank), px + numW + 2, bigY - clamp(L.W * 0.018, 14, 28));
+    }
+  }
+
+  // ── Section 3: CONNECTIONS ───────────────────────────────────────────────
+  {
+    const sy = topY + sectionH * 2.30;
+    ctx.font = labelFont;
+    outlineText('CONNECTIONS', px, sy);
+
+    const rowY = sy + clamp(L.W * 0.022, 20, 32);
+    const colW = pw / 3;
+    const items = [
+      { n: data.conn.yes,   l: 'Yes'   },
+      { n: data.conn.maybe, l: 'Maybe' },
+      { n: data.conn.no,    l: 'No'    },
+    ];
+    items.forEach((it, i) => {
+      const x = px + i * colW;
+      ctx.font = connNum;
+      outlineText(String(it.n), x, rowY);
+      const nW = ctx.measureText(String(it.n)).width;
+      ctx.font = connLbl;
+      outlineText(' ' + it.l, x + nW + 2, rowY);
+    });
+  }
+}
+
 function draw() {
   const L = layout;
   const fontFamily = "'Open Sans', system-ui, sans-serif";
@@ -616,6 +765,9 @@ function draw() {
   ctx.font = '700 ' + clamp(L.W * 0.026, 20, 24) + 'px ' + fontFamily;
   ctx.fillStyle = '#000000'; ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'center';
   outlineText(title.text, (L.col1X + L.col3X) / 2 + 10, L.titleY);
+
+  // ── Stats panel (left whitespace) ─────────────────────────────────────────
+  drawStatsPanel(L, fontFamily, outlineText);
 
   // ── Column headers ────────────────────────────────────────────────────────
   ctx.font = '400 ' + L.fonts.header + 'px ' + fontFamily;
