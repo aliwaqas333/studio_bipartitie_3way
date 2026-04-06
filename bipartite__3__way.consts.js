@@ -39,12 +39,12 @@
   // Column positions as fraction of canvas width (0–1)
   // col1X = left column (Methods), col2X = middle (Learning outcomes), col3X = right (Critiques)
   const layout = {
-    col1X: 0.42,
-    col2X: 0.62,
-    col3X: 0.82,
+    col1X: 0.37,
+    col2X: 0.59,
+    col3X: 0.83,
     // Stats panel occupies the left whitespace (fractions of canvas width)
-    statsPanelX: 0.04,  // left edge
-    statsPanelW: 0.26,  // width
+    statsPanelX: 0.06,  // left edge
+    statsPanelW: 0.19,  // width
   };
 
   // Labels and pcts come from Excel — sub count is structural (must match Excel rows)

@@ -341,10 +341,10 @@ function getLayout() {
   canvas.style.height = height + 'px';
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  const margin     = height * 0.040;                 // equal whitespace above title and below legend
+  const margin     = height * 0.042;                 // equal whitespace above title and below legend
   const titleFontH = height * 0.022;                 // cap-height offset (~70% of em) for baseline
   const titleY     = margin + titleFontH;            // visual top of title sits at margin from top
-  const topPad     = height * 0.115;                 // figure starts here
+  const topPad     = height * 0.06;                 // figure starts here
   const headerY    = topPad - height * 0.014;        // column headers tight above figure
   const bottomPad  = height * 0.07;                  // space for single footer row
   const usableH   = height - topPad - bottomPad;
@@ -665,6 +665,8 @@ function computeStatsData() {
   let totalRanks = perSub.length;
   let nodes  = subNodes;
 
+  let isCatHover = false;
+
   if (hoverTarget.type === 'sub' && perSub[hoverTarget.idx]) {
     column = 'sub'; record = perSub[hoverTarget.idx]; rank = subRank[record.idx];
     totalRanks = perSub.length; nodes = subNodes;
@@ -674,33 +676,82 @@ function computeStatsData() {
   } else if (hoverTarget.type === 'alt' && perAlt[hoverTarget.idx]) {
     column = 'alt'; record = perAlt[hoverTarget.idx]; rank = altRank[record.idx];
     totalRanks = perAlt.length; nodes = altNodes;
+  } else if (hoverTarget.type === 'cat') {
+    isCatHover = true;
+    const { catId, colType } = hoverTarget;
+    if (colType === 'left') {
+      column = 'sub'; nodes = subNodes;
+      // Aggregate all subs in this category
+      const matching = perSub.filter((_, si) => subNodes[si].catId === catId);
+      record = matching.reduce((acc, r) => ({ idx: -1, sC: acc.sC + r.sC, mC: acc.mC + r.mC, wC: acc.wC + r.wC, score: acc.score + r.score }), { idx: -1, sC: 0, mC: 0, wC: 0, score: 0 });
+      totalRanks = perSub.length;
+    } else {
+      column = 'mid'; nodes = midNodes;
+      // Aggregate all mids in this category
+      const matching = perMid.filter((_, mi) => midNodes[mi].catId === catId);
+      record = matching.reduce((acc, r) => ({ idx: -1, sC: acc.sC + r.sC, mC: acc.mC + r.mC, wC: acc.wC + r.wC, score: acc.score + r.score }), { idx: -1, sC: 0, mC: 0, wC: 0, score: 0 });
+      totalRanks = perMid.length;
+    }
+    rank = null; // no single rank for a category
   }
 
   // Category % = hovered node's height / total column height
   let categoryPct = 100;
-  if (record) {
+  if (record && !isCatHover) {
     const node = nodes[record.idx];
     const totalH = nodes.reduce((s, n) => s + n.h, 0);
     categoryPct = totalH > 0 ? (node.h / totalH) * 100 : 0;
+  } else if (isCatHover) {
+    const catId = hoverTarget.catId;
+    const colType = hoverTarget.colType;
+    const catNodes = colType === 'left'
+      ? subNodes.filter(sn => sn.catId === catId)
+      : midNodes.filter(mn => mn.catId === catId);
+    const totalH = nodes.reduce((s, n) => s + n.h, 0);
+    const catH = catNodes.reduce((s, n) => s + n.h, 0);
+    categoryPct = totalH > 0 ? (catH / totalH) * 100 : 0;
   }
 
   // Totals for the active column (denominators for radial charts)
-  const totals = column === 'mid' ? sumB(perMid)
-              : column === 'alt' ? sumB(perAlt)
-              : sumB(perSub);
+  const totals = record
+    ? (column === 'mid' ? sumB(perMid) : column === 'alt' ? sumB(perAlt) : sumB(perSub))
+    : null;
+
+  // Grand totals across all connections (shown when not hovering)
+  const allSub = sumB(perSub);
+  const allAlt = sumB(perAlt);
+  const grandTotal = {
+    sC: allSub.sC + allAlt.sC,
+    mC: allSub.mC + allAlt.mC,
+    wC: allSub.wC + allAlt.wC,
+  };
 
   // Connections: Strong (S) and Moderate (M+W) only — no "No" bucket
   const conn = record
     ? { strong: record.sC, moderate: record.mC + record.wC }
-    : { strong: 0, moderate: 0 };
-  const connTotals = { strong: totals.sC, moderate: totals.mC + totals.wC };
+    : { strong: grandTotal.sC, moderate: grandTotal.mC + grandTotal.wC };
+  const connTotals = totals
+    ? { strong: totals.sC, moderate: totals.mC + totals.wC }
+    : { strong: grandTotal.sC, moderate: grandTotal.mC + grandTotal.wC };
 
   // "of Methods / Learning outcomes / Critiques"
   const colLabel = column === 'mid' ? columnHeader.middle
                  : column === 'alt' ? columnHeader.right
                  : columnHeader.left;
 
-  return { hovered: record, categoryPct, rank, totalRanks, conn, connTotals, colLabel };
+  // Color of the hovered item
+  let hoveredColor = '#8B7BB5'; // default
+  if (isCatHover) {
+    const catId = hoverTarget.catId;
+    if (hoverTarget.colType === 'left') hoveredColor = catColors[catId]?.base || hoveredColor;
+    else                                 hoveredColor = midCatColors[catId]?.base || hoveredColor;
+  } else if (record) {
+    if (column === 'sub')      hoveredColor = catColors[subNodes[record.idx].catId]?.base || hoveredColor;
+    else if (column === 'mid') hoveredColor = midCatColors[midNodes[record.idx].catId]?.base || hoveredColor;
+    else if (column === 'alt') hoveredColor = alternatives[record.idx]?.color || hoveredColor;
+  }
+
+  return { hovered: record, categoryPct, rank, totalRanks, conn, connTotals, colLabel, hoveredColor };
 }
 
 function ordinalSuffix(n) {
@@ -714,13 +765,17 @@ function drawStatsPanel(L, fontFamily, outlineText) {
   const pw = L.W * (cfg.statsPanelW ?? 0.26);
   const data = computeStatsData();
 
-  // Vertical rhythm: 3 sections spanning the figure's vertical band
-  const topY    = L.topPad;
-  const bottomY = L.H - L.H * 0.11; // just above the footer
-  const bandH   = bottomY - topY;
-  const sectionH = bandH / 3;
+  // 6 items: title, category, impact, connections, description, footer
+  // Gap after title is half; remaining 4 gaps are equal
+  const totalH = L.footerY - L.headerY;
+  const halfGap = totalH / 9; // title gap = 0.5 unit, 4 other gaps = 1 unit each → 4.5 units
+  const fullGap = halfGap * 2;
+  const slot1Y = L.headerY + halfGap;              // CATEGORY
+  const slot2Y = slot1Y + fullGap;                  // IMPACT RANK
+  const slot3Y = slot2Y + fullGap;                  // CONNECTIONS
+  const slot4Y = slot3Y + fullGap;                  // DESCRIPTION
 
-  // All labels: 400 weight Open Sans
+  // Fonts
   const labelFont = '300 ' + clamp(L.W * 0.0105, 11, 14) + 'px ' + fontFamily;
   const bigFont   = '100 ' + clamp(L.W * 0.055, 38, 72) + 'px ' + fontFamily;
   const subFont   = '300 ' + clamp(L.W * 0.011, 10, 13) + 'px ' + fontFamily;
@@ -732,7 +787,7 @@ function drawStatsPanel(L, fontFamily, outlineText) {
 
   // ── Section 1: CATEGORY ──────────────────────────────────────────────────
   {
-    const sy = topY + sectionH * 0.30;
+    const sy = slot1Y;
     ctx.font = labelFont;
     outlineText('CATEGORY', px, sy);
 
@@ -750,15 +805,16 @@ function drawStatsPanel(L, fontFamily, outlineText) {
 
   // ── Section 2: IMPACT RANK ───────────────────────────────────────────────
   {
-    const sy = topY + sectionH * 1.30;
+    const sy = slot2Y;
     ctx.font = labelFont;
     outlineText('IMPACT RANK', px, sy);
 
     const bigY = sy + clamp(L.W * 0.052, 48, 72);
-    ctx.font = bigFont;
     if (data.rank == null) {
+      ctx.font = '100 ' + clamp(L.W * 0.030, 22, 40) + 'px ' + fontFamily;
       outlineText('—', px, bigY);
     } else {
+      ctx.font = bigFont;
       const numText = String(data.rank);
       outlineText(numText, px, bigY);
       const numW = ctx.measureText(numText).width;
@@ -767,56 +823,90 @@ function drawStatsPanel(L, fontFamily, outlineText) {
     }
   }
 
-  // ── Section 3: CONNECTIONS — two radial bar charts (Strong / Moderate) ──
+  // ── Section 3: CONNECTIONS — two gauge-style radial charts ──────────────
   {
-    const sy = topY + sectionH * 2.25;
+    const sy = slot3Y;
     ctx.font = labelFont;
     outlineText('CONNECTIONS', px, sy);
 
-    // Size charts to fit between CONNECTIONS label and footer
-    const maxChartBottom = L.footerY - 20;
-    const maxR     = (maxChartBottom - sy - 40) / 2.6; // room for label below
-    const radius   = clamp(Math.min(pw * 0.18, maxR), 20, 46);
-    const lineW    = clamp(radius * 0.20, 4, 10);
-    const chartGap = clamp(pw * 0.10, 10, 30);
-    const cx1      = px + radius + lineW;
-    const cx2      = cx1 + radius * 2 + chartGap;
-    const cy       = sy + radius + lineW + clamp(L.W * 0.016, 12, 24);
+    // Size charts to fit within slot with padding before description
+    const labelGap = clamp(L.W * 0.016, 12, 24);
+    const chartLabelH = 18;
+    const slotPad = fullGap * 0.15;
+    const maxRv  = Math.max((fullGap - labelGap - chartLabelH - slotPad) / 2.4, 14);
+    // Also constrain by panel width: tick + lineW + r + r + gap + r + r + lineW + tick ≤ pw
+    const tickW   = 14;
+    const gapEst  = pw * 0.10;
+    const maxRw   = Math.max((pw - 2 * tickW - gapEst) / 4.4, 14); // 4 radii + 0.4 for lineW
+    const radius  = Math.min(pw * 0.22, maxRv, maxRw);
+    const lineW   = clamp(radius * 0.22, 3, 10);
+    const chartGap = clamp(pw * 0.10, 10, 28);
+    const cx1     = px + radius + lineW + tickW;
+    const cx2     = cx1 + radius * 2 + chartGap;
+    const cy       = sy + labelGap + lineW + radius;
     const trackClr = '#E8E8E8';
-    const strongClr = '#8B7BB5';
-    const modClr    = '#B8A9D4';
+
+    // Gauge arc: 270° sweep starting at 0 (top), gap on upper-left
+    const gapAngle   = Math.PI * 0.5;           // 90° gap
+    const sweepAngle = Math.PI * 2 - gapAngle;  // 270° sweep
+    const arcStart   = -Math.PI / 2;            // 0 at top (12 o'clock)
+    const arcEnd     = arcStart + sweepAngle;    // ends at 9 o'clock
+
+    // Hovered color for filled arc (falls back to muted purple)
+    const fillClr = data.hoveredColor || '#8B7BB5';
+    // Lighter version for moderate chart
+    const modClr = fillClr + '88'; // semi-transparent via hex alpha
 
     const charts = [
-      { label: 'Strong',   val: data.conn.strong,   total: data.connTotals.strong,   color: strongClr, cx: cx1 },
-      { label: 'Moderate', val: data.conn.moderate,  total: data.connTotals.moderate, color: modClr,    cx: cx2 },
+      { label: 'Strong',   val: data.conn.strong,   total: data.connTotals.strong,   color: fillClr,  cx: cx1 },
+      { label: 'Moderate', val: data.conn.moderate,  total: data.connTotals.moderate, color: modClr,   cx: cx2 },
     ];
 
     const numFont  = '300 ' + clamp(radius * 0.55, 12, 28) + 'px ' + fontFamily;
-    const chartLbl = '300 ' + clamp(radius * 0.32, 8, 14) + 'px ' + fontFamily;
+    const chartLbl = '300 ' + clamp(radius * 0.32, 12, 14) + 'px ' + fontFamily;
+    const tickFont = '300 ' + clamp(radius * 0.28, 8, 12) + 'px ' + fontFamily;
 
     charts.forEach(ch => {
-      const startA = -Math.PI / 2;
-      const frac   = ch.total > 0 ? ch.val / ch.total : 0;
-      const endA   = startA + frac * Math.PI * 2;
+      const frac = ch.total > 0 ? ch.val / ch.total : 0;
+      // Value fills clockwise from the top (-π/2)
+      const valStart = -Math.PI / 2;
+      const valEnd   = valStart + frac * sweepAngle;
 
-      // Background track
+      // Background track (incomplete circle)
       ctx.beginPath();
-      ctx.arc(ch.cx, cy, radius, 0, Math.PI * 2);
+      ctx.arc(ch.cx, cy, radius, arcStart, arcEnd);
       ctx.strokeStyle = trackClr;
       ctx.lineWidth = lineW;
       ctx.lineCap = 'round';
       ctx.globalAlpha = 1;
       ctx.stroke();
 
-      // Filled arc
+      // Filled arc from top going clockwise
       if (frac > 0) {
         ctx.beginPath();
-        ctx.arc(ch.cx, cy, radius, startA, endA);
+        ctx.arc(ch.cx, cy, radius, valStart, valEnd);
         ctx.strokeStyle = ch.color;
         ctx.lineWidth = lineW;
         ctx.lineCap = 'round';
         ctx.stroke();
       }
+
+      // Tick marks: 0 at top (start), mid at bottom, max at left (end)
+      ctx.font = tickFont;
+      ctx.fillStyle = '#AAAAAA';
+      const ticks = [
+        { val: 0,                          angle: arcStart },
+        { val: Math.round(ch.total / 2),   angle: arcStart + sweepAngle / 2 },
+        { val: ch.total,                   angle: arcEnd },
+      ];
+      const tickR = radius + lineW + clamp(radius * 0.18, 4, 10);
+      ticks.forEach(t => {
+        const tx = ch.cx + Math.cos(t.angle) * tickR;
+        const ty = cy + Math.sin(t.angle) * tickR;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(t.val), tx, ty);
+      });
 
       // Value in center
       ctx.font = numFont;
@@ -825,14 +915,48 @@ function drawStatsPanel(L, fontFamily, outlineText) {
       ctx.textBaseline = 'middle';
       ctx.fillText(String(ch.val), ch.cx, cy);
 
-      // Label below
+      // Label above left (like "C1" in mockup → use chart label)
       ctx.font = chartLbl;
+      ctx.fillStyle = '#666666';
+      ctx.textAlign = 'center';
       ctx.textBaseline = 'alphabetic';
       ctx.fillText(ch.label, ch.cx, cy + radius + lineW + clamp(radius * 0.35, 8, 16));
     });
 
     ctx.textAlign = 'left';
+    ctx.fillStyle = '#000000';
   }
+
+  // ── Section 4: DESCRIPTION ───────────────────────────────────────────────
+  {
+    const descY = slot4Y+40;
+    const descFont = '300 ' + clamp(L.W * 0.011, 12, 14) + 'px ' + fontFamily;
+    ctx.font = descFont;
+    ctx.fillStyle = '#999999';
+    ctx.textBaseline = 'alphabetic';
+    ctx.textAlign = 'left';
+
+    const descText = 'This visualization maps the relationships between methods, learning outcomes, and critiques in the design studio to support self-reflection and create opportunities for teaching innovation in content design and delivery.';
+    const maxDescW = pw;
+    const dWords = descText.split(' ');
+    const dLines = [];
+    let dCur = '';
+    dWords.forEach(w => {
+      const test = dCur ? dCur + ' ' + w : w;
+      if (ctx.measureText(test).width > maxDescW) { dLines.push(dCur); dCur = w; }
+      else dCur = test;
+    });
+    if (dCur) dLines.push(dCur);
+
+    const dlh = clamp(L.W * 0.012, 10, 14);
+    dLines.forEach((line, i) => {
+      ctx.fillText(line, px, descY + i * dlh);
+    });
+    ctx.fillStyle = '#000000';
+  }
+
+  window._statsPanelX = px;
+  window._statsPanelW = pw;
 }
 
 function draw() {
@@ -853,10 +977,11 @@ function draw() {
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, L.W, L.H);
 
-  // ── Title ─────────────────────────────────────────────────────────────────
+  // ── Title — left panel margin, above CATEGORY ─────────────────────────────
+  const spxTitle = L.W * (window.BIPARTITE_CONSTS.layout.statsPanelX ?? 0.04);
   ctx.font = '400 ' + clamp(L.W * 0.026, 20, 24) + 'px ' + fontFamily;
-  ctx.fillStyle = '#000000'; ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'center';
-  outlineText(title.text, (L.col1X + L.col3X) / 2 + 10, L.titleY);
+  ctx.fillStyle = '#000000'; ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+  outlineText(title.text, spxTitle, L.headerY);
 
   // ── Stats panel (left whitespace) ─────────────────────────────────────────
   drawStatsPanel(L, fontFamily, outlineText);
@@ -948,41 +1073,25 @@ function draw() {
     }
   });
 
-  // ── Footer: credit (left, under Methods) + legend (center) ───────────────
+  // ── Footer: legend (centered on figure), credit + buttons (left panel) ───
   const fSize = clamp(L.W * 0.011, 9, 12);
   ctx.font = '300 ' + fSize + 'px ' + fontFamily;
   ctx.textBaseline = 'middle'; ctx.globalAlpha = 1;
 
-  // ── Single footer row: all items equally spaced, centered together ──
   const swatchW = clamp(L.W * 0.009, 7, 10);
-  const rowGap  = clamp(L.W * 0.016, 12, 20);  // same gap between every item
+  const rowGap  = clamp(L.W * 0.016, 12, 20);
   const figMidX = (L.col1X + L.col3X) / 2;
   const midCatOrder = ['res', 'des', 'tech', 'comm'];
 
-  // if we cant fetch year, just use 2026
-  const year = new Date().getFullYear() || 2026;
-  const creditText = '@ Symbiosis Lab ' + year;
-  const creditW    = ctx.measureText(creditText).width + 20;
-
-  const btnsEl  = document.querySelector('.sk-btns');
-  const btnsW   = btnsEl ? btnsEl.offsetWidth || 80 : 80;
-
+  // ── Legend centered on figure columns ──
   const allLegendItems = [
     ...criteria.map(c     => ({ color: catColors[c.id].base,  label: c.label,                tw: ctx.measureText(c.label).width,                catId: c.id, colType: 'left' })),
     ...midCatOrder.map(id => ({ color: midCatColors[id].base, label: midCatColors[id].label, tw: ctx.measureText(midCatColors[id].label).width, catId: id,   colType: 'mid'  }))
   ];
 
-  // total width of the full row: credit + gap + legend items + gap + buttons
-  const legendW   = allLegendItems.reduce((s, it) => s + swatchW + 5 + it.tw, 0) + rowGap * (allLegendItems.length - 1);
-  const totalRowW = creditW + rowGap * 2 + legendW + btnsW;
-  let rx = figMidX - totalRowW / 2;
+  const legendW = allLegendItems.reduce((s, it) => s + swatchW + 5 + it.tw, 0) + rowGap * (allLegendItems.length - 1);
+  let rx = figMidX - legendW / 2;
 
-  // Credit text
-  ctx.fillStyle = '#000000'; ctx.textAlign = 'left'; ctx.globalAlpha = 1;
-  outlineText(creditText, rx, L.footerY);
-  rx += creditW + rowGap;
-
-  // Legend items — store hit boxes for hover detection
   window._legendHitBoxes = [];
   allLegendItems.forEach(({ color, label, tw, catId, colType }) => {
     const itemW = swatchW + 5 + tw;
@@ -997,8 +1106,20 @@ function draw() {
     rx += swatchW + 5 + tw + rowGap;
   });
 
-  // Store buttons X for positionButtons()
-  window._footerBtnsX = rx + 20;
+  // ── Credit text + buttons in left panel, aligned with legend row ──
+  const spx = window._statsPanelX || L.W * 0.04;
+  const creditY = L.footerY; // same vertical line as legend
+  const year = new Date().getFullYear() || 2026;
+  const creditText = '@ Symbiosis Lab ' + year;
+  ctx.fillStyle = '#000000'; ctx.textAlign = 'left'; ctx.globalAlpha = 1;
+  ctx.font = '300 ' + fSize + 'px ' + fontFamily;
+  ctx.textBaseline = 'middle';
+  outlineText(creditText, spx, creditY);
+
+  // Store buttons position — left panel, right of credit, same Y as legend
+  const creditW = ctx.measureText(creditText).width;
+  window._footerBtnsX = spx + creditW + 20;
+  window._footerBtnsY = creditY;
 }
 
 function hitTest(mx, my) {
@@ -1082,11 +1203,12 @@ function positionButtons() {
   if (!btns || !layout) return;
   const btnH      = btns.offsetHeight || 28;
   const canvasTop = canvas.offsetTop;
-  const bx        = window._footerBtnsX != null ? window._footerBtnsX : layout.col3X;
+  const bx = window._footerBtnsX != null ? window._footerBtnsX : layout.col3X;
+  const by = window._footerBtnsY != null ? window._footerBtnsY : layout.footerY;
   btns.style.left   = (canvas.offsetLeft + bx) + 'px';
   btns.style.right  = 'auto';
   btns.style.bottom = 'auto';
-  btns.style.top    = (canvasTop + layout.footerY - btnH / 2) + 'px';
+  btns.style.top    = (canvasTop + by - btnH / 2) + 'px';
 }
 
 function render() { layout = getLayout(); buildGeometry(); draw(); positionButtons(); }
