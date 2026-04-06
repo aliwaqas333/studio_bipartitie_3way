@@ -354,7 +354,7 @@ function getLayout() {
     col1X: width * window.BIPARTITE_CONSTS.layout.col1X,  // sub-criteria  — labels LEFT
     col2X: width * window.BIPARTITE_CONSTS.layout.col2X,  // middle items  — labels RIGHT
     col3X: width * window.BIPARTITE_CONSTS.layout.col3X,  // alternatives  — labels RIGHT
-    nodeW: clamp(width * 0.014, 10, 16),
+    nodeW: clamp(width * 0.007, 5, 8),
     labelPad: clamp(width * 0.009, 6, 12),
 
     // vertical gaps
@@ -777,7 +777,7 @@ function drawStatsPanel(L, fontFamily, outlineText) {
 
   // Fonts
   const labelFont = '300 ' + clamp(L.W * 0.0105, 11, 14) + 'px ' + fontFamily;
-  const bigFont   = '100 ' + clamp(L.W * 0.055, 38, 72) + 'px ' + fontFamily;
+  const bigFont   = '300 ' + clamp(L.W * 0.055, 38, 72) + 'px ' + fontFamily;
   const subFont   = '300 ' + clamp(L.W * 0.011, 10, 13) + 'px ' + fontFamily;
 
   ctx.fillStyle = '#000000';
@@ -789,7 +789,7 @@ function drawStatsPanel(L, fontFamily, outlineText) {
   {
     const sy = slot1Y;
     ctx.font = labelFont;
-    outlineText('CATEGORY', px, sy);
+    outlineText('CATEGORY REPRESENTATION', px, sy);
 
     const bigY = sy + clamp(L.W * 0.052, 48, 80);
     ctx.font = bigFont;
@@ -811,7 +811,7 @@ function drawStatsPanel(L, fontFamily, outlineText) {
 
     const bigY = sy + clamp(L.W * 0.052, 48, 72);
     if (data.rank == null) {
-      ctx.font = '100 ' + clamp(L.W * 0.030, 22, 40) + 'px ' + fontFamily;
+      ctx.font = '300 ' + clamp(L.W * 0.030, 22, 40) + 'px ' + fontFamily;
       outlineText('—', px, bigY);
     } else {
       ctx.font = bigFont;
@@ -843,7 +843,7 @@ function drawStatsPanel(L, fontFamily, outlineText) {
     // pw*(1-chartGapFrac) = 4R*(1+0.22) + 4*tickW  →  R = (pw*(1-gf) - 4*tickW) / 4.88
     const maxRw   = Math.max((pw * (1 - chartGapFrac) - 4 * tickW) / 4.88, 14);
     const radius  = Math.min(maxRv, maxRw);
-    const lineW   = clamp(radius * 0.22, 3, 10);
+    const lineW   = clamp(radius * 0.198, 2.7, 9);
     const chartGap = pw * chartGapFrac;
     // Center chart 1 at quarter, chart 2 at three-quarter of panel
     const cx1     = px + tickW + lineW + radius;
@@ -857,14 +857,13 @@ function drawStatsPanel(L, fontFamily, outlineText) {
     const arcStart   = -Math.PI / 2;            // 0 at top (12 o'clock)
     const arcEnd     = arcStart + sweepAngle;    // ends at 9 o'clock
 
-    // Hovered color for filled arc (falls back to muted purple)
-    const fillClr = data.hoveredColor || '#8B7BB5';
-    // Lighter version for moderate chart
-    const modClr = fillClr + '88'; // semi-transparent via hex alpha
+    // Hovered: colored fill on light grey track; Not hovered: light grey fill + dark grey outline
+    const isHovered = !!data.hovered;
+    const hovClr = data.hoveredColor || '#8B7BB5';
 
     const charts = [
-      { label: 'Strong',   val: data.conn.strong,   total: data.connTotals.strong,   color: fillClr,  cx: cx1 },
-      { label: 'Moderate', val: data.conn.moderate,  total: data.connTotals.moderate, color: modClr,   cx: cx2 },
+      { label: 'Strong',   val: data.conn.strong,   total: data.connTotals.strong,   hovFill: hovClr,        border: '#AAAAAA', cx: cx1 },
+      { label: 'Moderate', val: data.conn.moderate,  total: data.connTotals.moderate, hovFill: hovClr + '88', border: '#CCCCCC', cx: cx2 },
     ];
 
     const numFont  = '300 ' + clamp(radius * 0.55, 12, 28) + 'px ' + fontFamily;
@@ -877,28 +876,47 @@ function drawStatsPanel(L, fontFamily, outlineText) {
       const valStart = -Math.PI / 2;
       const valEnd   = valStart + frac * sweepAngle;
 
-      // Background track (incomplete circle)
-      ctx.beginPath();
-      ctx.arc(ch.cx, cy, radius, arcStart, arcEnd);
-      ctx.strokeStyle = trackClr;
-      ctx.lineWidth = lineW;
-      ctx.lineCap = 'round';
-      ctx.globalAlpha = 1;
-      ctx.stroke();
-
-      // Filled arc from top going clockwise
-      if (frac > 0) {
+      if (isHovered) {
+        // Hovered: light grey track + colored fill
         ctx.beginPath();
-        ctx.arc(ch.cx, cy, radius, valStart, valEnd);
-        ctx.strokeStyle = ch.color;
+        ctx.arc(ch.cx, cy, radius, arcStart, arcEnd);
+        ctx.strokeStyle = trackClr;
         ctx.lineWidth = lineW;
+        ctx.lineCap = 'round';
+        ctx.globalAlpha = 1;
+        ctx.stroke();
+
+        if (frac > 0) {
+          ctx.beginPath();
+          ctx.arc(ch.cx, cy, radius, valStart, valEnd);
+          ctx.strokeStyle = ch.hovFill;
+          ctx.lineWidth = lineW;
+          ctx.lineCap = 'round';
+          ctx.stroke();
+        }
+      } else {
+        // Not hovered: same total width as hovered, border drawn at lineW then fill inset
+        // Border at full lineW (same as hover)
+        ctx.beginPath();
+        ctx.arc(ch.cx, cy, radius, arcStart, arcEnd);
+        ctx.strokeStyle = ch.border;
+        ctx.lineWidth = lineW;
+        ctx.lineCap = 'round';
+        ctx.globalAlpha = 1;
+        ctx.stroke();
+
+        // Light grey fill inset (leaves thin border visible)
+        ctx.beginPath();
+        ctx.arc(ch.cx, cy, radius, arcStart, arcEnd);
+        ctx.strokeStyle = trackClr;
+        ctx.lineWidth = lineW * 0.7;
         ctx.lineCap = 'round';
         ctx.stroke();
       }
 
       // Tick marks: 0 at top (start), mid at bottom, max at left (end)
       ctx.font = tickFont;
-      ctx.fillStyle = '#AAAAAA';
+      ctx.fillStyle = '#000000';
       const ticks = [
         { val: 0,                          angle: arcStart },
         { val: Math.round(ch.total / 2),   angle: arcStart + sweepAngle / 2 },
@@ -922,7 +940,7 @@ function drawStatsPanel(L, fontFamily, outlineText) {
 
       // Label above left (like "C1" in mockup → use chart label)
       ctx.font = chartLbl;
-      ctx.fillStyle = '#666666';
+      ctx.fillStyle = '#000000';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'alphabetic';
       ctx.fillText(ch.label, ch.cx, cy + radius + lineW + clamp(radius * 0.35, 8, 16));
@@ -935,9 +953,10 @@ function drawStatsPanel(L, fontFamily, outlineText) {
   // ── Section 4: DESCRIPTION ───────────────────────────────────────────────
   {
     const descY = slot4Y+40;
-    const descFont = '300 ' + clamp(L.W * 0.011, 12, 14) + 'px ' + fontFamily;
+    const descFontSize = clamp(L.W * 0.011, 9, 12);
+    const descFont = '300 ' + descFontSize + 'px ' + fontFamily;
     ctx.font = descFont;
-    ctx.fillStyle = '#999999';
+    ctx.fillStyle = '#000000';
     ctx.textBaseline = 'alphabetic';
     ctx.textAlign = 'left';
 
@@ -953,7 +972,7 @@ function drawStatsPanel(L, fontFamily, outlineText) {
     });
     if (dCur) dLines.push(dCur);
 
-    const dlh = clamp(L.W * 0.012, 10, 14);
+    const dlh = descFontSize * 1.28;
     dLines.forEach((line, i) => {
       ctx.fillText(line, px, descY + i * dlh);
     });
@@ -984,7 +1003,7 @@ function draw() {
 
   // ── Title — left panel margin, above CATEGORY ─────────────────────────────
   const spxTitle = L.W * (window.BIPARTITE_CONSTS.layout.statsPanelX ?? 0.04);
-  ctx.font = '400 ' + clamp(L.W * 0.026, 20, 24) + 'px ' + fontFamily;
+  ctx.font = '300 ' + clamp(L.W * 0.026, 20, 24) + 'px ' + fontFamily;
   ctx.fillStyle = '#000000'; ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
   outlineText(title.text, spxTitle, L.headerY);
 
@@ -1114,8 +1133,8 @@ function draw() {
   // ── Credit text + buttons in left panel, aligned with legend row ──
   const spx = window._statsPanelX || L.W * 0.04;
   const creditY = L.footerY; // same vertical line as legend
-  const year = new Date().getFullYear() || 2026;
-  const creditText = '@ Symbiosis Lab ' + year;
+  // const year = new Date().getFullYear() || 2026;
+  const creditText = '© Mohamad T. Araji';
   ctx.fillStyle = '#000000'; ctx.textAlign = 'left'; ctx.globalAlpha = 1;
   ctx.font = '300 ' + fSize + 'px ' + fontFamily;
   ctx.textBaseline = 'middle';
