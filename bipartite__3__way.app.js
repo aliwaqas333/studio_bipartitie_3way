@@ -829,20 +829,25 @@ function drawStatsPanel(L, fontFamily, outlineText) {
     ctx.font = labelFont;
     outlineText('CONNECTIONS', px, sy);
 
-    // Size charts to fit within slot with padding before description
+    // Size charts to span full panel width
     const labelGap = clamp(L.W * 0.016, 12, 24);
     const chartLabelH = 18;
     const slotPad = fullGap * 0.15;
     const maxRv  = Math.max((fullGap - labelGap - chartLabelH - slotPad) / 2.4, 14);
-    // Also constrain by panel width: tick + lineW + r + r + gap + r + r + lineW + tick ≤ pw
-    const tickW   = 14;
-    const gapEst  = pw * 0.10;
-    const maxRw   = Math.max((pw - 2 * tickW - gapEst) / 4.4, 14); // 4 radii + 0.4 for lineW
-    const radius  = Math.min(pw * 0.22, maxRv, maxRw);
+    // Fill panel: px + tickW + lineW + R ... R + lineW + tickW = px + pw
+    // Two charts: each takes 2R + 2lineW + 2tickW, with a gap between
+    const tickW   = 12;
+    const chartGapFrac = 0.08;
+    // pw = 2*(tickW + lineW + R) + gap + 2*(tickW + lineW + R)  →  simplified:
+    // pw = 4R + 4lineW + 4tickW + gap;  lineW ≈ 0.22R, gap = chartGapFrac*pw
+    // pw*(1-chartGapFrac) = 4R*(1+0.22) + 4*tickW  →  R = (pw*(1-gf) - 4*tickW) / 4.88
+    const maxRw   = Math.max((pw * (1 - chartGapFrac) - 4 * tickW) / 4.88, 14);
+    const radius  = Math.min(maxRv, maxRw);
     const lineW   = clamp(radius * 0.22, 3, 10);
-    const chartGap = clamp(pw * 0.10, 10, 28);
-    const cx1     = px + radius + lineW + tickW;
-    const cx2     = cx1 + radius * 2 + chartGap;
+    const chartGap = pw * chartGapFrac;
+    // Center chart 1 at quarter, chart 2 at three-quarter of panel
+    const cx1     = px + tickW + lineW + radius;
+    const cx2     = px + pw - tickW - lineW - radius;
     const cy       = sy + labelGap + lineW + radius;
     const trackClr = '#E8E8E8';
 
