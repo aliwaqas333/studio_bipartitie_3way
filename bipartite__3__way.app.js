@@ -684,20 +684,23 @@ function computeStatsData() {
     categoryPct = totalH > 0 ? (node.h / totalH) * 100 : 0;
   }
 
-  // Connections: hovered record's own counts, otherwise totals for default column
+  // Totals for the active column (denominators for radial charts)
   const totals = column === 'mid' ? sumB(perMid)
               : column === 'alt' ? sumB(perAlt)
               : sumB(perSub);
+
+  // Connections: Strong (S) and Moderate (M+W) only — no "No" bucket
   const conn = record
-    ? { yes: record.sC, maybe: record.mC, no: record.wC + record.nC }
-    : { yes: totals.sC, maybe: totals.mC, no: totals.wC + totals.nC };
+    ? { strong: record.sC, moderate: record.mC + record.wC }
+    : { strong: 0, moderate: 0 };
+  const connTotals = { strong: totals.sC, moderate: totals.mC + totals.wC };
 
   // "of Methods / Learning outcomes / Critiques"
   const colLabel = column === 'mid' ? columnHeader.middle
                  : column === 'alt' ? columnHeader.right
                  : columnHeader.left;
 
-  return { hovered: record, categoryPct, rank, totalRanks, conn, colLabel };
+  return { hovered: record, categoryPct, rank, totalRanks, conn, connTotals, colLabel };
 }
 
 function ordinalSuffix(n) {
@@ -717,11 +720,10 @@ function drawStatsPanel(L, fontFamily, outlineText) {
   const bandH   = bottomY - topY;
   const sectionH = bandH / 3;
 
-  const labelFont = '400 ' + clamp(L.W * 0.0105, 11, 14) + 'px ' + fontFamily;
+  // All labels: 400 weight Open Sans
+  const labelFont = '300 ' + clamp(L.W * 0.0105, 11, 14) + 'px ' + fontFamily;
   const bigFont   = '100 ' + clamp(L.W * 0.055, 38, 72) + 'px ' + fontFamily;
   const subFont   = '300 ' + clamp(L.W * 0.011, 10, 13) + 'px ' + fontFamily;
-  const connNum   = '300 ' + clamp(L.W * 0.013, 12, 16) + 'px ' + fontFamily;
-  const connLbl   = '300 ' + clamp(L.W * 0.011, 10, 13) + 'px ' + fontFamily;
 
   ctx.fillStyle = '#000000';
   ctx.globalAlpha = 1;
@@ -755,7 +757,6 @@ function drawStatsPanel(L, fontFamily, outlineText) {
     const bigY = sy + clamp(L.W * 0.052, 48, 72);
     ctx.font = bigFont;
     if (data.rank == null) {
-      // Two dashes placeholder
       outlineText('—', px, bigY);
     } else {
       const numText = String(data.rank);
@@ -766,27 +767,71 @@ function drawStatsPanel(L, fontFamily, outlineText) {
     }
   }
 
-  // ── Section 3: CONNECTIONS ───────────────────────────────────────────────
+  // ── Section 3: CONNECTIONS — two radial bar charts (Strong / Moderate) ──
   {
-    const sy = topY + sectionH * 2.30;
+    const sy = topY + sectionH * 2.25;
     ctx.font = labelFont;
     outlineText('CONNECTIONS', px, sy);
 
-    const rowY = sy + clamp(L.W * 0.022, 20, 32);
-    const colW = pw / 3;
-    const items = [
-      { n: data.conn.yes,   l: 'Yes'   },
-      { n: data.conn.maybe, l: 'Maybe' },
-      { n: data.conn.no,    l: 'No'    },
+    // Size charts to fit between CONNECTIONS label and footer
+    const maxChartBottom = L.footerY - 20;
+    const maxR     = (maxChartBottom - sy - 40) / 2.6; // room for label below
+    const radius   = clamp(Math.min(pw * 0.18, maxR), 20, 46);
+    const lineW    = clamp(radius * 0.20, 4, 10);
+    const chartGap = clamp(pw * 0.10, 10, 30);
+    const cx1      = px + radius + lineW;
+    const cx2      = cx1 + radius * 2 + chartGap;
+    const cy       = sy + radius + lineW + clamp(L.W * 0.016, 12, 24);
+    const trackClr = '#E8E8E8';
+    const strongClr = '#8B7BB5';
+    const modClr    = '#B8A9D4';
+
+    const charts = [
+      { label: 'Strong',   val: data.conn.strong,   total: data.connTotals.strong,   color: strongClr, cx: cx1 },
+      { label: 'Moderate', val: data.conn.moderate,  total: data.connTotals.moderate, color: modClr,    cx: cx2 },
     ];
-    items.forEach((it, i) => {
-      const x = px + i * colW;
-      ctx.font = connNum;
-      outlineText(String(it.n), x, rowY);
-      const nW = ctx.measureText(String(it.n)).width;
-      ctx.font = connLbl;
-      outlineText(' ' + it.l, x + nW + 2, rowY);
+
+    const numFont  = '300 ' + clamp(radius * 0.55, 12, 28) + 'px ' + fontFamily;
+    const chartLbl = '300 ' + clamp(radius * 0.32, 8, 14) + 'px ' + fontFamily;
+
+    charts.forEach(ch => {
+      const startA = -Math.PI / 2;
+      const frac   = ch.total > 0 ? ch.val / ch.total : 0;
+      const endA   = startA + frac * Math.PI * 2;
+
+      // Background track
+      ctx.beginPath();
+      ctx.arc(ch.cx, cy, radius, 0, Math.PI * 2);
+      ctx.strokeStyle = trackClr;
+      ctx.lineWidth = lineW;
+      ctx.lineCap = 'round';
+      ctx.globalAlpha = 1;
+      ctx.stroke();
+
+      // Filled arc
+      if (frac > 0) {
+        ctx.beginPath();
+        ctx.arc(ch.cx, cy, radius, startA, endA);
+        ctx.strokeStyle = ch.color;
+        ctx.lineWidth = lineW;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+      }
+
+      // Value in center
+      ctx.font = numFont;
+      ctx.fillStyle = '#000000';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(ch.val), ch.cx, cy);
+
+      // Label below
+      ctx.font = chartLbl;
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(ch.label, ch.cx, cy + radius + lineW + clamp(radius * 0.35, 8, 16));
     });
+
+    ctx.textAlign = 'left';
   }
 }
 
@@ -809,7 +854,7 @@ function draw() {
   ctx.fillRect(0, 0, L.W, L.H);
 
   // ── Title ─────────────────────────────────────────────────────────────────
-  ctx.font = '700 ' + clamp(L.W * 0.026, 20, 24) + 'px ' + fontFamily;
+  ctx.font = '400 ' + clamp(L.W * 0.026, 20, 24) + 'px ' + fontFamily;
   ctx.fillStyle = '#000000'; ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'center';
   outlineText(title.text, (L.col1X + L.col3X) / 2 + 10, L.titleY);
 
@@ -817,7 +862,7 @@ function draw() {
   drawStatsPanel(L, fontFamily, outlineText);
 
   // ── Column headers ────────────────────────────────────────────────────────
-  ctx.font = '400 ' + L.fonts.header + 'px ' + fontFamily;
+  ctx.font = '300 ' + L.fonts.header + 'px ' + fontFamily;
   ctx.fillStyle = '#000000'; ctx.textBaseline = 'alphabetic';
   const hOff = 8; // nudge headers slightly right to visually center over content
   ctx.textAlign = 'center'; outlineText(columnHeader.left, L.col1X + hOff, L.headerY);
@@ -916,7 +961,7 @@ function draw() {
 
   // if we cant fetch year, just use 2026
   const year = new Date().getFullYear() || 2026;
-  const creditText = '@Symbiosis Lab ' + year;
+  const creditText = '@ Symbiosis Lab ' + year;
   const creditW    = ctx.measureText(creditText).width + 20;
 
   const btnsEl  = document.querySelector('.sk-btns');
