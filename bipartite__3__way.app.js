@@ -329,7 +329,7 @@ function getLayout() {
 
   const margin     = height * 0.082;                 // equal whitespace above title and below legend
   const titleFontH = height * 0.022;                 // cap-height offset (~70% of em) for baseline
-  const titleY     = margin + titleFontH - titleFontH*0.2;       // adjust multiplier (1=highest, 2=lowest) to move title up/down
+  const titleY     = margin + titleFontH - height * 0.029;       // adjust multiplier (1=highest, 2=lowest) to move title up/down
   const topPad     = height * 0.06;                 // figure starts here
   const headerY    = topPad - height * 0.01;        // column headers tight above figure
   const bottomPad  = height * 0.11;                  // space for single footer row
@@ -752,7 +752,7 @@ function drawStatsPanel(L, fontFamily, outlineText) {
   const data = computeStatsData();
 
   // ── Equal visual gaps: measure each section's content height, derive sectionGap ──
-  const totalH     = L.footerY - L.headerY;
+  const totalH     = L.footerY - L.headerY - L.titleY; // total height between header and footer, minus gap above footer
   const titleH     = clamp(L.W * 0.03, 20, 50) * 0.75; // cap-height above baseline
   const _bigF      = clamp(L.W * 0.055, 32, 62);
   const catH       = clamp(L.W * 0.052, 48, 80) + _bigF * 0.78;
@@ -764,9 +764,9 @@ function drawStatsPanel(L, fontFamily, outlineText) {
   const sectionGap = Math.max((totalH - titleH - catH - impH - connH - descH) / 5, 10);
   const fullGap    = connH + sectionGap;           // kept for connections chart sizing
 
-  const slot1Y = L.headerY + titleH + sectionGap*2.5; // CATEGORY  — starts below title cap-height
+  const slot1Y = L.titleY + titleH + sectionGap; // CATEGORY  — starts below title cap-height
   const slot2Y = slot1Y + catH  + sectionGap;     // IMPACT RANK
-  const slot3Y = slot2Y + impH  + sectionGap;     // CONNECTIONS
+  const slot3Y = slot2Y + impH + sectionGap;     // CONNECTIONS
   const slot4Y = slot3Y + connH + sectionGap;     // DESCRIPTION
 
   // Fonts
@@ -781,11 +781,11 @@ function drawStatsPanel(L, fontFamily, outlineText) {
 
   // ── Section 1: CATEGORY ──────────────────────────────────────────────────
   {
-    const sy = slot1Y + clamp(titleH * 0.1, 20, 80); // small gap above label
+    const sy = slot1Y + clamp(titleH * 0., 12, 100); // small gap above label
     ctx.font = labelFont;
-    outlineText('CATEGORY REPRESENTATION', px, sy+15);
+    outlineText('CATEGORY REPRESENTATION', px, sy);
 
-    const bigY = sy + clamp(L.W * 0.052, 48, 80);
+    const bigY = sy + clamp(L.W * 0.052, 30, 72); // gap after label to big text
     ctx.font = bigFont;
     const pctText = Math.round(data.categoryPct) + '%';
     outlineText(pctText, px, bigY);
@@ -799,11 +799,11 @@ function drawStatsPanel(L, fontFamily, outlineText) {
 
   // ── Section 2: IMPACT RANK ───────────────────────────────────────────────
   {
-    const sy = slot2Y + clamp(titleH * 0.1, 0, 80); // small gap above label
+    const sy = slot2Y; // small gap above label
     ctx.font = labelFont;
-    outlineText('IMPACT RANK', px, sy+15);
+    outlineText('IMPACT RANK', px, sy);
 
-    const bigY = sy + clamp(L.W * 0.052, 48, 72);
+    const bigY = sy + clamp(L.W * 0.052, 30, 60); // gap after label to big text
     if (data.rank == null) {
       ctx.font = '300 ' + clamp(L.W * 0.030, 22, 40) + 'px ' + fontFamily;
       outlineText('—', px, bigY);
@@ -819,7 +819,7 @@ function drawStatsPanel(L, fontFamily, outlineText) {
 
   // ── Section 3: CONNECTIONS — two gauge-style radial charts ──────────────
   {
-    const sy = slot3Y + clamp(titleH * 0.1, 0, 80); // small gap above label
+    const sy = slot3Y; // small gap above label
     ctx.font = labelFont;
     outlineText('CONNECTIONS', px, sy);
 
