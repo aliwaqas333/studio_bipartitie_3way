@@ -38,12 +38,15 @@
 
   // Column positions as fraction of canvas width (0–1)
   // col1X = left column (Methods), col2X = middle (Learning outcomes), col3X = right (Critiques)
+  const colsgap = 0.24 // gap between columns (fractions of canvas width)
+  const col1X = 0.4;
+  const col2X = col1X + colsgap;
+  const col3X = col2X + colsgap;
+
   const layout = {
-    col1X: 0.37,
-    col2X: 0.59,
-    col3X: 0.83,
+    col1X, col2X, col3X,
     // Stats panel occupies the left whitespace (fractions of canvas width)
-    statsPanelX: 0.06,  // left edge
+    statsPanelX: 0.08,  // left edge
     statsPanelW: 0.19,  // width
   };
 

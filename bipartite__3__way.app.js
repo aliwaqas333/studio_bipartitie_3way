@@ -340,8 +340,8 @@ function getLayout() {
     col1X: width * window.BIPARTITE_CONSTS.layout.col1X,  // sub-criteria  — labels LEFT
     col2X: width * window.BIPARTITE_CONSTS.layout.col2X,  // middle items  — labels RIGHT
     col3X: width * window.BIPARTITE_CONSTS.layout.col3X,  // alternatives  — labels RIGHT
-    nodeW: clamp(width * 0.007, 5, 8),
-    labelPad: clamp(width * 0.009, 6, 12),
+    nodeW: clamp(width * 0.00875, 8, 10),
+    labelPad: clamp(width * 0.003, 6, 12),
 
     // vertical gaps
     subGap: 1,    // gap between sub-criteria within a category (left column)
@@ -351,11 +351,11 @@ function getLayout() {
     altGap: 1, // gap between alternatives (right column)
     fonts: {
       header: clamp(width * 0.014, 11, 14),
-      legend: clamp(width * 0.012, 10, 13),
+      legend: clamp(width * 0.012, 11, 14),
       sub:    clamp(width * 0.011,  9, 12),
-      mid:    clamp(width * 0.010,  8, 11),
-      alt:    clamp(width * 0.0115, 10, 13),
-      pct:    clamp(width * 0.0095,  8, 10)
+      mid:    clamp(width * 0.010,  9, 12),
+      alt:    clamp(width * 0.0115, 9, 12),
+      pct:    clamp(width * 0.0095,  9, 12)
     },
     lineGap: clamp(height * 0.017, 6, 16),
     footerY: height - margin,           // visual bottom of legend sits at margin from bottom
@@ -751,20 +751,28 @@ function drawStatsPanel(L, fontFamily, outlineText) {
   const pw = L.W * (cfg.statsPanelW ?? 0.26);
   const data = computeStatsData();
 
-  // 6 items: title, category, impact, connections, description, footer
-  // Gap after title is half; remaining 4 gaps are equal
-  const totalH = L.footerY - L.headerY;
-  const halfGap = totalH / 9; // title gap = 0.5 unit, 4 other gaps = 1 unit each → 4.5 units
-  const fullGap = halfGap * 2;
-  const slot1Y = L.headerY + halfGap;              // CATEGORY
-  const slot2Y = slot1Y + fullGap;                  // IMPACT RANK
-  const slot3Y = slot2Y + fullGap;                  // CONNECTIONS
-  const slot4Y = slot3Y + fullGap;                  // DESCRIPTION
+  // ── Equal visual gaps: measure each section's content height, derive sectionGap ──
+  const totalH     = L.footerY - L.headerY;
+  const titleH     = clamp(L.W * 0.03, 20, 50) * 0.75; // cap-height above baseline
+  const _bigF      = clamp(L.W * 0.055, 32, 62);
+  const catH       = clamp(L.W * 0.052, 48, 80) + _bigF * 0.78;
+  const impH       = clamp(L.W * 0.052, 48, 72) + _bigF * 0.78;
+  const _cRad      = Math.max((pw * 0.92 - 48) / 4.88, 14);
+  const _cLW       = clamp(_cRad * 0.198, 2.7, 9);
+  const connH      = clamp(L.W * 0.016, 12, 24) + _cLW + 2 * _cRad + _cLW + clamp(_cRad * 0.35, 8, 16) + 8;
+  const descH      = 40 + 7 * (L.fonts.header * 1.28);
+  const sectionGap = Math.max((totalH - titleH - catH - impH - connH - descH) / 5, 10);
+  const fullGap    = connH + sectionGap;           // kept for connections chart sizing
+
+  const slot1Y = L.headerY + titleH + sectionGap; // CATEGORY  — starts below title cap-height
+  const slot2Y = slot1Y + catH  + sectionGap;     // IMPACT RANK
+  const slot3Y = slot2Y + impH  + sectionGap;     // CONNECTIONS
+  const slot4Y = slot3Y + connH + sectionGap;     // DESCRIPTION
 
   // Fonts
   const labelFont = '300 ' + clamp(L.W * 0.0105, 11, 14) + 'px ' + fontFamily;
-  const bigFont   = '300 ' + clamp(L.W * 0.055, 38, 72) + 'px ' + fontFamily;
-  const subFont   = '300 ' + clamp(L.W * 0.011, 10, 13) + 'px ' + fontFamily;
+  const bigFont   = '300 ' + clamp(L.W * 0.055, 32, 62) + 'px ' + fontFamily;
+  const subFont   = '300 ' + clamp(L.W * 0.011, 11, 14) + 'px ' + fontFamily;
 
   ctx.fillStyle = '#000000';
   ctx.globalAlpha = 1;
@@ -773,9 +781,9 @@ function drawStatsPanel(L, fontFamily, outlineText) {
 
   // ── Section 1: CATEGORY ──────────────────────────────────────────────────
   {
-    const sy = slot1Y;
+    const sy = slot1Y + clamp(titleH * 0.1, 20, 80); // small gap above label
     ctx.font = labelFont;
-    outlineText('CATEGORY REPRESENTATION', px, sy);
+    outlineText('CATEGORY REPRESENTATION', px, sy+15);
 
     const bigY = sy + clamp(L.W * 0.052, 48, 80);
     ctx.font = bigFont;
@@ -791,9 +799,9 @@ function drawStatsPanel(L, fontFamily, outlineText) {
 
   // ── Section 2: IMPACT RANK ───────────────────────────────────────────────
   {
-    const sy = slot2Y;
+    const sy = slot2Y + clamp(titleH * 0.1, 0, 80); // small gap above label
     ctx.font = labelFont;
-    outlineText('IMPACT RANK', px, sy);
+    outlineText('IMPACT RANK', px, sy+15);
 
     const bigY = sy + clamp(L.W * 0.052, 48, 72);
     if (data.rank == null) {
@@ -811,7 +819,7 @@ function drawStatsPanel(L, fontFamily, outlineText) {
 
   // ── Section 3: CONNECTIONS — two gauge-style radial charts ──────────────
   {
-    const sy = slot3Y;
+    const sy = slot3Y + clamp(titleH * 0.1, 0, 80); // small gap above label
     ctx.font = labelFont;
     outlineText('CONNECTIONS', px, sy);
 
@@ -852,9 +860,9 @@ function drawStatsPanel(L, fontFamily, outlineText) {
       { label: 'Moderate', val: data.conn.moderate,  total: data.connTotals.moderate, hovFill: hovClr + '88', border: '#CCCCCC', cx: cx2 },
     ];
 
-    const numFont  = '300 ' + clamp(radius * 0.55, 12, 28) + 'px ' + fontFamily;
-    const chartLbl = '300 ' + clamp(radius * 0.32, 12, 14) + 'px ' + fontFamily;
-    const tickFont = '300 ' + clamp(radius * 0.28, 8, 12) + 'px ' + fontFamily;
+    const numFont  = '300 ' + clamp(radius * 0.55, 11, 14) + 'px ' + fontFamily;
+    const chartLbl = '300 ' + clamp(radius * 0.32, 11, 14) + 'px ' + fontFamily;
+    const tickFont = '300 ' + clamp(radius * 0.28, 11, 14) + 'px ' + fontFamily;
 
     charts.forEach(ch => {
       const frac = ch.total > 0 ? ch.val / ch.total : 0;
@@ -930,7 +938,7 @@ function drawStatsPanel(L, fontFamily, outlineText) {
   // ── Section 4: DESCRIPTION ───────────────────────────────────────────────
   {
     const descY = slot4Y+40;
-    const descFontSize = clamp(L.W * 0.011, 9, 12);
+    const descFontSize = L.fonts.header;
     const descFont = '300 ' + descFontSize + 'px ' + fontFamily;
     ctx.font = descFont;
     ctx.fillStyle = '#000000';
@@ -950,8 +958,9 @@ function drawStatsPanel(L, fontFamily, outlineText) {
     if (dCur) dLines.push(dCur);
 
     const dlh = descFontSize * 1.28;
+    const maxDescBottom = L.footerY - sectionGap;    // leave equal gap above footer
     dLines.forEach((line, i) => {
-      ctx.fillText(line, px, descY + i * dlh);
+      if (descY + i * dlh <= maxDescBottom) ctx.fillText(line, px, descY + i * dlh);
     });
     ctx.fillStyle = '#000000';
   }
