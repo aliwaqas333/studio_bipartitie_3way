@@ -2,14 +2,10 @@ const canvas = document.getElementById('sk');
 const ctx = canvas.getContext('2d');
 const tip = document.getElementById('sktip');
 const {
-  dk,
   TOOLTIPS_ENABLED,
   BASE_W,
-  BASE_H,
-  HEIGHT_RATIO,
   bg,
   txtP,
-  txtS,
   headerC,
   catColors,
   midCatColors,
@@ -84,7 +80,7 @@ async function loadExcelData() {
     if (val) catNameToId[val] = id;
   });
 
-  criterJumpIndex = [3, 6, 10, 14]; // based on number of items in each category
+  const criterJumpIndex = [3, 6, 10, 14]; // based on number of items in each category
   const criteriacatNameToId = {};
   ['res', 'des', 'tech', 'comm'].forEach((id, i) => {
     const val = (rows[criterJumpIndex[i]][0] || '').toString().trim();
@@ -92,17 +88,13 @@ async function loadExcelData() {
   });
 
   const findkey = Object.keys(catNameToId).find(k => catNameToId[k] === 'res');
-   
-  // const catNameToId = { 'Pa4rti4': 'res', 'Qualitative': 'des', 'Quantitative': 'tech', 'Representation': 'comm' };
 
   // Dynamically find the category header row
   let catRowIdx = rows.findIndex(r => r.some(c => c.toString().trim() === findkey));
-  console.log('Category row index:', catRowIdx);
   if (catRowIdx === -1) catRowIdx = 3; // fallback
   const midLabelRowIdx = catRowIdx + 1;
   const SUB_ROW_START  = catRowIdx + 2;
 
-  // 
   const catRow      = rows[catRowIdx] || [];
   const midLabelRow = rows[midLabelRowIdx] || [];
   const MID_COL_START = catRow.findIndex(c => c.toString().trim() === findkey);
@@ -122,7 +114,6 @@ async function loadExcelData() {
     const catName = Object.keys(catNameToId).find(k => catNameToId[k] === catId);
     if (catName) midCatColors[catId].label = catName;
   });
-
 
   // ── 2. Criteria pcts from "%" col in Relationship Matrix ─────────────────
   const pctColIdx = midLabelRow.findIndex(c => c.toString().trim() === '%');
@@ -237,16 +228,11 @@ async function loadExcelData() {
       if (val) alternatives[key].color = `#${val}`;
     });
 
-
-
     // columnHeader values from configs sheet (row where col A = 'columnHeader')
     const colHdrRowIdx = 1;
     columnHeader.left = (rows3[colHdrRowIdx][1] || '').toString().trim();
     columnHeader.middle = (rows3[colHdrRowIdx][2] || '').toString().trim();
     columnHeader.right = (rows3[colHdrRowIdx][3] || '').toString().trim();
-    
-
-
 
     // individual% for mid items — row where col B = 'individual%'
     const indPctRowIdx2 = rows2.findIndex(r => (r[1] || '').toString().replace(/\s+/g, '').toLowerCase() === 'individual%');
@@ -343,10 +329,10 @@ function getLayout() {
 
   const margin     = height * 0.042;                 // equal whitespace above title and below legend
   const titleFontH = height * 0.022;                 // cap-height offset (~70% of em) for baseline
-  const titleY     = margin + titleFontH;            // visual top of title sits at margin from top
-  const topPad     = height * 0.06;                 // figure starts here
-  const headerY    = topPad - height * 0.014;        // column headers tight above figure
-  const bottomPad  = height * 0.07;                  // space for single footer row
+  const titleY     = margin + titleFontH * 3;       // adjust multiplier (1=highest, 2=lowest) to move title up/down
+  const topPad     = height * 0.1;                 // figure starts here
+  const headerY    = topPad - height * 0.02;        // column headers tight above figure
+  const bottomPad  = height * 0.06;                  // space for single footer row
   const usableH   = height - topPad - bottomPad;
 
   return {
@@ -895,22 +881,13 @@ function drawStatsPanel(L, fontFamily, outlineText) {
           ctx.stroke();
         }
       } else {
-        // Not hovered: same total width as hovered, border drawn at lineW then fill inset
-        // Border at full lineW (same as hover)
-        ctx.beginPath();
-        ctx.arc(ch.cx, cy, radius, arcStart, arcEnd);
-        ctx.strokeStyle = ch.border;
-        ctx.lineWidth = lineW;
-        ctx.lineCap = 'round';
-        ctx.globalAlpha = 1;
-        ctx.stroke();
-
-        // Light grey fill inset (leaves thin border visible)
+        // Not hovered: simple light grey fill, no outline
         ctx.beginPath();
         ctx.arc(ch.cx, cy, radius, arcStart, arcEnd);
         ctx.strokeStyle = trackClr;
-        ctx.lineWidth = lineW * 0.7;
+        ctx.lineWidth = lineW;
         ctx.lineCap = 'round';
+        ctx.globalAlpha = 1;
         ctx.stroke();
       }
 
@@ -1003,9 +980,9 @@ function draw() {
 
   // ── Title — left panel margin, above CATEGORY ─────────────────────────────
   const spxTitle = L.W * (window.BIPARTITE_CONSTS.layout.statsPanelX ?? 0.04);
-  ctx.font = '300 ' + clamp(L.W * 0.026, 20, 24) + 'px ' + fontFamily;
+  ctx.font = '100 ' + clamp(L.W * 0.03, 20, 50) + 'px ' + fontFamily;
   ctx.fillStyle = '#000000'; ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
-  outlineText(title.text, spxTitle, L.headerY);
+  outlineText(title.text, spxTitle, L.titleY);
 
   // ── Stats panel (left whitespace) ─────────────────────────────────────────
   drawStatsPanel(L, fontFamily, outlineText);
@@ -1133,7 +1110,6 @@ function draw() {
   // ── Credit text + buttons in left panel, aligned with legend row ──
   const spx = window._statsPanelX || L.W * 0.04;
   const creditY = L.footerY; // same vertical line as legend
-  // const year = new Date().getFullYear() || 2026;
   const creditText = '© Mohamad T. Araji';
   ctx.fillStyle = '#000000'; ctx.textAlign = 'left'; ctx.globalAlpha = 1;
   ctx.font = '300 ' + fSize + 'px ' + fontFamily;
