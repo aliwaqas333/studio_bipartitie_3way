@@ -46,8 +46,8 @@
   const layout = {
     col1X, col2X, col3X,
     // Stats panel occupies the left whitespace (fractions of canvas width)
-    statsPanelX: 0.08,  // left edge
-    statsPanelW: 0.19,  // width
+    statsPanelX: 0.06,  // left edge
+    statsPanelW: 0.21,  // width
   };
 
   // Labels and pcts come from Excel — sub count is structural (must match Excel rows)

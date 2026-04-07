@@ -327,12 +327,12 @@ function getLayout() {
   canvas.style.height = height + 'px';
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  const margin     = height * 0.042;                 // equal whitespace above title and below legend
+  const margin     = height * 0.082;                 // equal whitespace above title and below legend
   const titleFontH = height * 0.022;                 // cap-height offset (~70% of em) for baseline
-  const titleY     = margin + titleFontH * 3;       // adjust multiplier (1=highest, 2=lowest) to move title up/down
-  const topPad     = height * 0.1;                 // figure starts here
-  const headerY    = topPad - height * 0.02;        // column headers tight above figure
-  const bottomPad  = height * 0.06;                  // space for single footer row
+  const titleY     = margin + titleFontH - titleFontH*0.2;       // adjust multiplier (1=highest, 2=lowest) to move title up/down
+  const topPad     = height * 0.06;                 // figure starts here
+  const headerY    = topPad - height * 0.01;        // column headers tight above figure
+  const bottomPad  = height * 0.11;                  // space for single footer row
   const usableH   = height - topPad - bottomPad;
 
   return {
@@ -764,7 +764,7 @@ function drawStatsPanel(L, fontFamily, outlineText) {
   const sectionGap = Math.max((totalH - titleH - catH - impH - connH - descH) / 5, 10);
   const fullGap    = connH + sectionGap;           // kept for connections chart sizing
 
-  const slot1Y = L.headerY + titleH + sectionGap; // CATEGORY  — starts below title cap-height
+  const slot1Y = L.headerY + titleH + sectionGap*2.5; // CATEGORY  — starts below title cap-height
   const slot2Y = slot1Y + catH  + sectionGap;     // IMPACT RANK
   const slot3Y = slot2Y + impH  + sectionGap;     // CONNECTIONS
   const slot4Y = slot3Y + connH + sectionGap;     // DESCRIPTION
@@ -772,7 +772,7 @@ function drawStatsPanel(L, fontFamily, outlineText) {
   // Fonts
   const labelFont = '300 ' + clamp(L.W * 0.0105, 11, 14) + 'px ' + fontFamily;
   const bigFont   = '300 ' + clamp(L.W * 0.055, 32, 62) + 'px ' + fontFamily;
-  const subFont   = '300 ' + clamp(L.W * 0.011, 11, 14) + 'px ' + fontFamily;
+  const subFont   = '300 ' + clamp(L.W * 0.011, 9, 11) + 'px ' + fontFamily;
 
   ctx.fillStyle = '#000000';
   ctx.globalAlpha = 1;
@@ -860,9 +860,9 @@ function drawStatsPanel(L, fontFamily, outlineText) {
       { label: 'Moderate', val: data.conn.moderate,  total: data.connTotals.moderate, hovFill: hovClr + '88', border: '#CCCCCC', cx: cx2 },
     ];
 
-    const numFont  = '300 ' + clamp(radius * 0.55, 11, 14) + 'px ' + fontFamily;
-    const chartLbl = '300 ' + clamp(radius * 0.32, 11, 14) + 'px ' + fontFamily;
-    const tickFont = '300 ' + clamp(radius * 0.28, 11, 14) + 'px ' + fontFamily;
+    const numFont  = '300 ' + clamp(radius * 0.55, 12, 28) + 'px ' + fontFamily;
+    const chartLbl = '300 ' + clamp(radius * 0.32, 9, 12) + 'px ' + fontFamily;
+    const tickFont = '300 ' + clamp(radius * 0.28, 9, 11) + 'px ' + fontFamily;
 
     charts.forEach(ch => {
       const frac = ch.total > 0 ? ch.val / ch.total : 0;
