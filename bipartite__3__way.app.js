@@ -752,7 +752,7 @@ function ordinalSuffix(n) {
 
 function drawStatsPanel(L, fontFamily, outlineText) {
   const cfg = window.BIPARTITE_CONSTS.layout;
-  const px = L.W * (L.W < 800 ? 0.005 : (cfg.statsPanelX ?? 0.04));
+  const px = L.W * (L.W < 800 ? 0.025 : (cfg.statsPanelX ?? 0.04));
   const pw = L.W * (L.W < 800 ? 0.25 : (cfg.statsPanelW ?? 0.26));
   const data = computeStatsData();
 
@@ -796,14 +796,14 @@ function drawStatsPanel(L, fontFamily, outlineText) {
     const sy = slot1Y + clamp(titleH * 0., 12, 100); // small gap above label
     ctx.font = labelFont;
     const labelLineH = clamp(L.W * 0.0105, 11, 14) * 1.3;
-    if (L.W < 500) {
+    if (L.W < 558) {
       outlineText('CATEGORY', px, sy);
       outlineText('REPRESENTATION', px, sy + labelLineH);
     } else {
       outlineText('CATEGORY REPRESENTATION', px, sy);
     }
 
-    const bigY = sy + (L.W < 500 ? labelLineH * 2 : 0) + clamp(L.W * 0.052, 30, 60); // gap after label to big text
+    const bigY = sy + (L.W < 558 ? labelLineH * 2 : 0) + clamp(L.W * 0.052, 30, 60); // gap after label to big text
     ctx.font = bigFont;
     const pctText = Math.round(data.categoryPct) + '%';
     outlineText(pctText, px, bigY);
@@ -1015,9 +1015,9 @@ function draw() {
   ctx.fillRect(0, 0, L.W, L.H);
 
   // ── Title — left panel margin, above CATEGORY ─────────────────────────────
-  const spxTitle = L.W * (L.W < 800 ? 0.005 : (window.BIPARTITE_CONSTS.layout.statsPanelX ?? 0.04));
-  const titleFontSz = clamp(L.W * 0.03, 20, 50);
-  ctx.font = '100 ' + titleFontSz + 'px ' + fontFamily;
+  const spxTitle = L.W * (L.W < 800 ? 0.025 : (window.BIPARTITE_CONSTS.layout.statsPanelX ?? 0.04));
+  const titleFontSz = L.W > 558 ? clamp(L.W * 0.03, 28, 62) : clamp(L.W * 0.05, 18, 40);
+  ctx.font = '300 ' + titleFontSz + 'px ' + fontFamily;
   ctx.fillStyle = '#000000'; ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
   if (L.W < 800 && title.text && title.text.includes(' ')) {
     // Split into 2 lines at the word boundary closest to visual midpoint
@@ -1208,10 +1208,10 @@ function draw() {
   ctx.textBaseline = 'middle';
   outlineText(creditText, spx, creditY);
 
-  // Store buttons position — on mobile: below credit; on desktop: right of credit
+  // Store buttons position — on mobile: above credit; on desktop: right of credit
   const creditW = ctx.measureText(creditText).width;
-  window._footerBtnsX = L.W < 800 ? spx : spx + creditW + 20;
-  window._footerBtnsY = L.W < 800 ? creditY + fSize + 10 : creditY;
+  window._footerBtnsX = L.W < 800 ? spx - 5 : spx + creditW + 20;
+  window._footerBtnsY = L.W < 800 ? creditY - fSize - 10 : creditY;
 }
 
 function hitTest(mx, my) {
@@ -1293,7 +1293,11 @@ function updateTooltip(hit, evt) {
 function positionButtons() {
   const btns = document.querySelector('.sk-btns');
   if (!btns || !layout) return;
-  const btnH      = btns.offsetHeight || 28;
+  const isMobile = layout.W < 800;
+  const scale = isMobile ? 0.6 : 1;
+  btns.style.transform = isMobile ? 'scale(0.6)' : 'none';
+  btns.style.transformOrigin = 'left center';
+  const btnH      = (btns.offsetHeight || 28) * scale;
   const canvasTop = canvas.offsetTop;
   const bx = window._footerBtnsX != null ? window._footerBtnsX : layout.col3X;
   const by = window._footerBtnsY != null ? window._footerBtnsY : layout.footerY;
