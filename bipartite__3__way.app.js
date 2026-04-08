@@ -1134,7 +1134,14 @@ function draw() {
       ctx.font = '300 ' + L.fonts.alt + 'px ' + fontFamily;
       ctx.fillStyle = '#000000';
       ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-      outlineText(an.label, L.col3X + L.nodeW + L.labelPad, an.midY);
+      if (L.W < 500) {
+        const lines = wrapLabel(an.label, 13);
+        lines.forEach((l, li) => {
+          outlineText(l, L.col3X + L.nodeW + L.labelPad, an.midY + (li - (lines.length - 1) / 2) * L.lineGap);
+        });
+      } else {
+        outlineText(an.label, L.col3X + L.nodeW + L.labelPad, an.midY);
+      }
     }
   });
 
@@ -1157,16 +1164,21 @@ function draw() {
   window._legendHitBoxes = [];
 
   if (L.W < 555) {
-    // 2-row legend centered under the figure
-    const figCenterX = (L.col1X + L.col3X + L.nodeW) / 2;
-    const rowH = fSize * 1.8;
+    // 2-row legend, left-justified at col1X, justified spacing, stuck to bottom
+    const rowH = fSize * 2;
     const half = Math.ceil(allLegendItems.length / 2);
     const rows = [allLegendItems.slice(0, half), allLegendItems.slice(half)];
+    const panelRight = L.W * 0.025 + L.W * 0.25 + 4;  // after left stat column
+    const legendStartX = panelRight;
+    const availW = L.W - legendStartX - 4;  // extend to right edge
+    const row1Y = L.footerY;
+    const row2Y = row1Y + rowH;
 
     rows.forEach((rowItems, ri) => {
-      const rw = rowItems.reduce((s, it) => s + swatchW + 5 + it.tw, 0) + rowGap * (rowItems.length - 1);
-      let rx = figCenterX - rw / 2;
-      const ry = L.footerY + ri * rowH;
+      const contentW = rowItems.reduce((s, it) => s + swatchW + 5 + it.tw, 0);
+      const gap = rowItems.length > 1 ? (availW - contentW) / (rowItems.length - 1) : 0;
+      let rx = legendStartX;
+      const ry = ri === 0 ? row1Y : row2Y;
 
       rowItems.forEach(({ color, label, tw, catId, colType }) => {
         const itemW = swatchW + 5 + tw;
@@ -1178,7 +1190,7 @@ function draw() {
         ctx.globalAlpha = isHovered ? 1.0 : 1;
         ctx.fillStyle = color; ctx.textAlign = 'left';
         outlineText(label, rx + swatchW + 5, ry);
-        rx += swatchW + 5 + tw + rowGap;
+        rx += swatchW + 5 + tw + gap;
       });
     });
   } else {
