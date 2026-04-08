@@ -47,7 +47,7 @@
     col1X, col2X, col3X,
     // Stats panel occupies the left whitespace (fractions of canvas width)
     statsPanelX: 0.07,  // left edge
-    statsPanelW: 0.19,  // width
+    statsPanelW: 0.227,  // width
   };
 
   // Labels and pcts come from Excel — sub count is structural (must match Excel rows)

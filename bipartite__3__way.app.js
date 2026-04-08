@@ -327,19 +327,18 @@ function getLayout() {
   canvas.style.width  = width + 'px';
   canvas.style.height = height + 'px';
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-  const margin     = height * 0.082;                 // equal whitespace above title and below legend
+  const margin     = window.screen.width < 800 ? height * 0.082 : height * 0.082;                 // equal whitespace above title and below legend
   const titleFontH = height * 0.022;                 // cap-height offset (~70% of em) for baseline
-  const titleY     = margin + titleFontH - height * 0.029;       // adjust multiplier (1=highest, 2=lowest) to move title up/down
-  const topPad     = height * 0.06;                 // figure starts here
+  const titleY     = window.screen.width < 800 ? margin + titleFontH - height * 0.06 : margin + titleFontH - height * 0.029;       // adjust multiplier (1=highest, 2=lowest) to move title up/down
+  const topPad     = window.screen.width < 800 ? height * 0.04 : height * 0.06;                 // figure starts here
   const headerY    = topPad - height * 0.01;        // column headers tight above figure
-  const bottomPad  = height * 0.11;                  // space for single footer row
+  const bottomPad  = window.screen.width < 800 ? height * 0.08 : height * 0.11;                  // space for single footer row
   const usableH   = height - topPad - bottomPad;
 
   const isMobile = width < 800;
   const defaultGap = window.BIPARTITE_CONSTS.layout.col2X - window.BIPARTITE_CONSTS.layout.col1X;
   const col1Start = isMobile ? 0.45 : window.BIPARTITE_CONSTS.layout.col1X;  // 20% panel + 1% gap
-  const colsgap   = width < 500 ? 0.2 : (isMobile ? 0.2 : defaultGap);
+  const colsgap   = width < 500 ? 0.195 : (isMobile ? 0.2 : defaultGap);
   return {
     W: width, H: height, topPad, bottomPad, usableH,
     col1X: width * col1Start,                                  // sub-criteria  — labels LEFT
@@ -753,7 +752,7 @@ function ordinalSuffix(n) {
 function drawStatsPanel(L, fontFamily, outlineText) {
   const cfg = window.BIPARTITE_CONSTS.layout;
   const px = L.W * (L.W < 800 ? 0.025 : (cfg.statsPanelX ?? 0.04));
-  const pw = L.W * (L.W < 800 ? 0.25 : (cfg.statsPanelW ?? 0.26));
+  const pw = L.W * (L.W < 800 ? 0.26 : (cfg.statsPanelW ?? 0.26));
   const data = computeStatsData();
 
   // ── Equal visual gaps: measure each section's content height, derive sectionGap ──
@@ -773,9 +772,16 @@ function drawStatsPanel(L, fontFamily, outlineText) {
   const fullGap    = connH + sectionGap;           // kept for connections chart sizing
 
   const slot1Y = L.titleY + titleH + sectionGap; // CATEGORY  — starts below title cap-height
-  const slot2Y = slot1Y + catH  + sectionGap;     // IMPACT RANK
-  const slot3Y = slot2Y + impH + sectionGap;     // CONNECTIONS
-  const slot4Y = slot3Y + connH + sectionGap;     // DESCRIPTION
+  let slot2Y = slot1Y + catH  + sectionGap;     // IMPACT RANK
+  let slot3Y = slot2Y + impH + sectionGap;     // CONNECTIONS
+  let slot4Y = slot3Y + connH + sectionGap;     // DESCRIPTION
+
+  if (L.W < 555) {
+    slot4Y += 25;
+    slot2Y += 25;
+  }
+  
+
 
   // Clip entire stats panel so no text bleeds into the figure area
   ctx.save();
@@ -797,8 +803,8 @@ function drawStatsPanel(L, fontFamily, outlineText) {
     ctx.font = labelFont;
     const labelLineH = clamp(L.W * 0.0105, 11, 14) * 1.3;
     if (L.W < 558) {
-      outlineText('CATEGORY', px, sy);
-      outlineText('REPRESENTATION', px, sy + labelLineH);
+      outlineText('CATEGORY', px, sy+labelLineH*0.8);
+      outlineText('REPRESENTATION', px, sy + labelLineH*1.8);
     } else {
       outlineText('CATEGORY REPRESENTATION', px, sy);
     }
@@ -854,8 +860,8 @@ function drawStatsPanel(L, fontFamily, outlineText) {
     // pw = 4R + 4lineW + 4tickW + gap;  lineW ≈ 0.22R, gap = chartGapFrac*pw
     // pw*(1-chartGapFrac) = 4R*(1+0.22) + 4*tickW  →  R = (pw*(1-gf) - 4*tickW) / 4.88
     // On mobile charts stack vertically — each gets full panel width: pw = 2*(tickW + lineW + R) → R = (pw - 2*tickW) / 2.396
-    const maxRw   = L.W < 800
-      ? Math.max((pw * 0.66 - 2 * tickW) / 2.396, 14)
+    const maxRw   = L.W < 800 // maxRW means "radius when charts are wide (desktop)" vs "radius when charts are narrow (mobile)" 
+      ? Math.max((pw * 0.72 - 2 * tickW) / 2.396, 14)
       : Math.max((pw * (1 - chartGapFrac) - 4 * tickW) / 4.88, 14);
     const radius  = Math.min(maxRv, maxRw);
     const lineW   = clamp(radius * 0.198, 2.7, 9);
@@ -866,7 +872,7 @@ function drawStatsPanel(L, fontFamily, outlineText) {
     const cx1 = L.W < 800 ? px + pw / 2 : px + tickW + lineW + radius;
     const cx2 = L.W < 800 ? px + pw / 2 : px + pw - tickW - lineW - radius;
     const cy1 = cy1base;
-    const cy2 = L.W < 800 ? cy1base + chartH + 30 : cy1base;
+    const cy2 = L.W < 800 ? cy1base + chartH + 12 : cy1base;
     const trackClr = '#E8E8E8';
 
     // Gauge arc: 270° sweep starting at 0 (top), gap on upper-left
@@ -1165,13 +1171,13 @@ function draw() {
 
   if (L.W < 555) {
     // 2-row legend, left-justified at col1X, justified spacing, stuck to bottom
-    const rowH = fSize * 2;
+    const rowH = fSize * 1.4;
     const half = Math.ceil(allLegendItems.length / 2);
     const rows = [allLegendItems.slice(0, half), allLegendItems.slice(half)];
-    const panelRight = L.W * 0.025 + L.W * 0.25 + 4;  // after left stat column
+    const panelRight = L.W * 0.15 + L.W * 0.25;  // after left stat column
     const legendStartX = panelRight;
     const availW = L.W - legendStartX - 4;  // extend to right edge
-    const row1Y = L.footerY;
+    const row1Y = L.footerY *1.03;
     const row2Y = row1Y + rowH;
 
     rows.forEach((rowItems, ri) => {
@@ -1213,7 +1219,7 @@ function draw() {
 
   // ── Credit text + buttons in left panel, aligned with legend row ──
   const spx = window._statsPanelX || L.W * 0.04;
-  const creditY = L.W < 800 ? L.footerY - clamp(L.W * 0.04, 26, 36) - 20 : L.footerY;
+  const creditY = L.W < 800 ? L.footerY + fSize * 4 : L.footerY;
   const creditText = '© Mohamad T. Araji';
   ctx.fillStyle = '#000000'; ctx.textAlign = 'left'; ctx.globalAlpha = 1;
   ctx.font = '300 ' + fSize + 'px ' + fontFamily;
