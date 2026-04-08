@@ -18,6 +18,18 @@ const title = {
   text:"",
 }
 
+// Save on scroll
+window.addEventListener('scroll', () => {
+  sessionStorage.setItem('scrollY', window.scrollY);
+});
+
+// Restore after your visualization renders
+function onVisualizationReady() {
+  const saved = sessionStorage.getItem('scrollY');
+  if (saved) window.scrollTo(0, parseInt(saved));
+}
+
+
 const columnHeader = {
   left: 'Methods',
   middle: 'Learning outcomes',
