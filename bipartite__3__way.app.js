@@ -18,16 +18,28 @@ const title = {
   text:"",
 }
 
-// Save on scroll
+// Throttled scroll save
+let scrollTimeout;
 window.addEventListener('scroll', () => {
-  sessionStorage.setItem('scrollY', window.scrollY);
+  clearTimeout(scrollTimeout);
+  scrollTimeout = setTimeout(() => {
+    sessionStorage.setItem('scrollY', window.scrollY);
+  }, 150);
 });
 
-// Restore after your visualization renders
-function onVisualizationReady() {
+// Restore — call this AFTER your visualization renders
+function restoreScroll() {
   const saved = sessionStorage.getItem('scrollY');
   if (saved) window.scrollTo(0, parseInt(saved));
 }
+
+// Also restore when tab becomes visible again
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    restoreScroll();
+  }
+});
+
 
 
 const columnHeader = {
@@ -1518,3 +1530,4 @@ canvas.addEventListener('mouseleave', () => {
 });
 
 loadAndRender();
+
