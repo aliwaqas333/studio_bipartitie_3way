@@ -311,6 +311,9 @@ async function loadAndRender() {
     console.warn('Excel load failed (likely file:// CORS). Using default data.', e);
   }
   render();
+  // after your sankey .append() chain completes
+  restoreScroll();
+
 }
 
 function clamp(v, min, max) {
