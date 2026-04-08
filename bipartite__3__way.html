@@ -106,10 +106,18 @@
 
     <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
     <script>
-      // Cache-bust consts + app on every page load
+      // Cache-bust all JS on every page load
       const _v = Date.now() + Math.random();
       document.write('<script src="./bipartite__3__way.consts.js?v=' + _v + '"><\/script>');
-      document.write('<script src="./bipartite__3__way.app.js?v=' + _v + '"><\/script>');
+      document.write('<script src="./js/utils.js?v='    + _v + '"><\/script>');
+      document.write('<script src="./js/state.js?v='    + _v + '"><\/script>');
+      document.write('<script src="./js/data.js?v='     + _v + '"><\/script>');
+      document.write('<script src="./js/layout.js?v='   + _v + '"><\/script>');
+      document.write('<script src="./js/geometry.js?v=' + _v + '"><\/script>');
+      document.write('<script src="./js/stats.js?v='    + _v + '"><\/script>');
+      document.write('<script src="./js/draw.js?v='     + _v + '"><\/script>');
+      document.write('<script src="./js/export.js?v='   + _v + '"><\/script>');
+      document.write('<script src="./js/main.js?v='     + _v + '"><\/script>');
     </script>
   </body>
 </html>
