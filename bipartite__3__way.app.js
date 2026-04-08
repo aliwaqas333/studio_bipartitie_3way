@@ -869,8 +869,8 @@ function drawStatsPanel(L, fontFamily, outlineText) {
     // Center chart 1 at quarter, chart 2 at three-quarter of panel
     const cy1base  = sy + labelGap + lineW + radius;
     const chartH   = 2 * (radius + lineW) + clamp(radius * 0.35, 8, 16) + 10;
-    const cx1 = L.W < 800 ? px + pw / 2 : px + tickW + lineW + radius;
-    const cx2 = L.W < 800 ? px + pw / 2 : px + pw - tickW - lineW - radius;
+    const cx1 = L.W < 800 ? px + tickW + lineW + radius : px + tickW + lineW + radius;
+    const cx2 = L.W < 800 ? px + tickW + lineW + radius : px + pw - tickW - lineW - radius;
     const cy1 = cy1base;
     const cy2 = L.W < 800 ? cy1base + chartH + 12 : cy1base;
     const trackClr = '#E8E8E8';
@@ -1174,9 +1174,9 @@ function draw() {
     const rowH = fSize * 1.4;
     const half = Math.ceil(allLegendItems.length / 2);
     const rows = [allLegendItems.slice(0, half), allLegendItems.slice(half)];
-    const panelRight = L.W * 0.15 + L.W * 0.25;  // after left stat column
+    const panelRight = L.W * 0.20 + L.W * 0.15;  // after left stat column
     const legendStartX = panelRight;
-    const availW = L.W - legendStartX - 4;  // extend to right edge
+    const availW = L.W*0.6;  // extend to right edge
     const row1Y = L.footerY *1.03;
     const row2Y = row1Y + rowH;
 
@@ -1312,8 +1312,10 @@ function positionButtons() {
   const btns = document.querySelector('.sk-btns');
   if (!btns || !layout) return;
   const isMobile = layout.W < 800;
-  const scale = isMobile ? 0.6 : 1;
-  btns.style.transform = isMobile ? 'scale(0.6)' : 'none';
+  btns.style.display = isMobile ? 'none' : 'flex';
+  if (isMobile) return;
+  const scale = 1;
+  btns.style.transform = 'none';
   btns.style.transformOrigin = 'left center';
   const btnH      = (btns.offsetHeight || 28) * scale;
   const canvasTop = canvas.offsetTop;
