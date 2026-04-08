@@ -318,12 +318,13 @@ let hoverTarget = { type: null, idx: null };
 
 function getLayout() {
   const container = canvas.closest('.sk');
-  const width  = Math.max(container.clientWidth || BASE_W, 640);
+  const width  = container.clientWidth || BASE_W;
   const height = window.innerHeight; // fill full viewport height
 
   const dpr = window.devicePixelRatio || 1;
   canvas.width = Math.round(width * dpr);
   canvas.height = Math.round(height * dpr);
+  canvas.style.width  = width + 'px';
   canvas.style.height = height + 'px';
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
@@ -335,11 +336,15 @@ function getLayout() {
   const bottomPad  = height * 0.11;                  // space for single footer row
   const usableH   = height - topPad - bottomPad;
 
+  const isMobile = width < 800;
+  const defaultGap = window.BIPARTITE_CONSTS.layout.col2X - window.BIPARTITE_CONSTS.layout.col1X;
+  const col1Start = isMobile ? 0.45 : window.BIPARTITE_CONSTS.layout.col1X;  // 20% panel + 1% gap
+  const colsgap   = width < 500 ? 0.2 : (isMobile ? 0.2 : defaultGap);
   return {
     W: width, H: height, topPad, bottomPad, usableH,
-    col1X: width * window.BIPARTITE_CONSTS.layout.col1X,  // sub-criteria  — labels LEFT
-    col2X: width * window.BIPARTITE_CONSTS.layout.col2X,  // middle items  — labels RIGHT
-    col3X: width * window.BIPARTITE_CONSTS.layout.col3X,  // alternatives  — labels RIGHT
+    col1X: width * col1Start,                                  // sub-criteria  — labels LEFT
+    col2X: width * (col1Start + colsgap),                      // middle items  — labels RIGHT
+    col3X: width * (col1Start + 2 * colsgap),                  // alternatives  — labels RIGHT
     nodeW: clamp(width * 0.00875, 8, 10),
     labelPad: clamp(width * 0.003, 6, 12),
 
@@ -747,27 +752,34 @@ function ordinalSuffix(n) {
 
 function drawStatsPanel(L, fontFamily, outlineText) {
   const cfg = window.BIPARTITE_CONSTS.layout;
-  const px = L.W * (cfg.statsPanelX ?? 0.04);
-  const pw = L.W * (cfg.statsPanelW ?? 0.26);
+  const px = L.W * (L.W < 800 ? 0.005 : (cfg.statsPanelX ?? 0.04));
+  const pw = L.W * (L.W < 800 ? 0.25 : (cfg.statsPanelW ?? 0.26));
   const data = computeStatsData();
 
   // ── Equal visual gaps: measure each section's content height, derive sectionGap ──
   const totalH     = L.footerY - L.headerY - L.titleY; // total height between header and footer, minus gap above footer
-  const titleH     = clamp(L.W * 0.03, 20, 50) * 0.75; // cap-height above baseline
+  const _titleFsz  = clamp(L.W * 0.03, 20, 50);
+  const titleH     = L.W < 800 ? _titleFsz * 1.4 : _titleFsz * 0.75; // 2 lines on mobile
   const _bigF      = clamp(L.W * 0.055, 32, 62);
   const catH       = clamp(L.W * 0.052, 48, 80) + _bigF * 0.78;
   const impH       = clamp(L.W * 0.052, 48, 72) + _bigF * 0.78;
-  const _cRad      = Math.max((pw * 0.92 - 48) / 4.88, 14);
+  const _cRad      = L.W < 800 ? Math.max((pw * 0.66 - 24) / 2.396, 14) : Math.max((pw * 0.92 - 48) / 4.88, 14);
   const _cLW       = clamp(_cRad * 0.198, 2.7, 9);
-  const connH      = clamp(L.W * 0.016, 12, 24) + _cLW + 2 * _cRad + _cLW + clamp(_cRad * 0.35, 8, 16) + 8;
+  const _oneChartH = clamp(L.W * 0.016, 12, 24) + _cLW + 2 * _cRad + _cLW + clamp(_cRad * 0.35, 8, 16) + 8;
+  const connH      = L.W < 800 ? _oneChartH * 2 + 10 : _oneChartH;
   const descH      = 40 + 7 * (L.fonts.header * 1.28);
-  const sectionGap = Math.max((totalH - titleH - catH - impH - connH - descH) / 5, 10);
+  const rawGap     = (totalH - titleH - catH - impH - connH - descH) / 5;
+  const sectionGap = Math.max(L.W < 800 ? Math.min(rawGap, 42) : rawGap, 8);
   const fullGap    = connH + sectionGap;           // kept for connections chart sizing
 
   const slot1Y = L.titleY + titleH + sectionGap; // CATEGORY  — starts below title cap-height
   const slot2Y = slot1Y + catH  + sectionGap;     // IMPACT RANK
   const slot3Y = slot2Y + impH + sectionGap;     // CONNECTIONS
   const slot4Y = slot3Y + connH + sectionGap;     // DESCRIPTION
+
+  // Clip entire stats panel so no text bleeds into the figure area
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0, 0, px + pw + 2, L.H); ctx.clip();
 
   // Fonts
   const labelFont = '300 ' + clamp(L.W * 0.0105, 11, 14) + 'px ' + fontFamily;
@@ -783,9 +795,15 @@ function drawStatsPanel(L, fontFamily, outlineText) {
   {
     const sy = slot1Y + clamp(titleH * 0., 12, 100); // small gap above label
     ctx.font = labelFont;
-    outlineText('CATEGORY REPRESENTATION', px, sy);
+    const labelLineH = clamp(L.W * 0.0105, 11, 14) * 1.3;
+    if (L.W < 500) {
+      outlineText('CATEGORY', px, sy);
+      outlineText('REPRESENTATION', px, sy + labelLineH);
+    } else {
+      outlineText('CATEGORY REPRESENTATION', px, sy);
+    }
 
-    const bigY = sy + clamp(L.W * 0.052, 30, 72); // gap after label to big text
+    const bigY = sy + (L.W < 500 ? labelLineH * 2 : 0) + clamp(L.W * 0.052, 30, 60); // gap after label to big text
     ctx.font = bigFont;
     const pctText = Math.round(data.categoryPct) + '%';
     outlineText(pctText, px, bigY);
@@ -835,14 +853,20 @@ function drawStatsPanel(L, fontFamily, outlineText) {
     // pw = 2*(tickW + lineW + R) + gap + 2*(tickW + lineW + R)  →  simplified:
     // pw = 4R + 4lineW + 4tickW + gap;  lineW ≈ 0.22R, gap = chartGapFrac*pw
     // pw*(1-chartGapFrac) = 4R*(1+0.22) + 4*tickW  →  R = (pw*(1-gf) - 4*tickW) / 4.88
-    const maxRw   = Math.max((pw * (1 - chartGapFrac) - 4 * tickW) / 4.88, 14);
+    // On mobile charts stack vertically — each gets full panel width: pw = 2*(tickW + lineW + R) → R = (pw - 2*tickW) / 2.396
+    const maxRw   = L.W < 800
+      ? Math.max((pw * 0.66 - 2 * tickW) / 2.396, 14)
+      : Math.max((pw * (1 - chartGapFrac) - 4 * tickW) / 4.88, 14);
     const radius  = Math.min(maxRv, maxRw);
     const lineW   = clamp(radius * 0.198, 2.7, 9);
     const chartGap = pw * chartGapFrac;
     // Center chart 1 at quarter, chart 2 at three-quarter of panel
-    const cx1     = px + tickW + lineW + radius;
-    const cx2     = px + pw - tickW - lineW - radius;
-    const cy       = sy + labelGap + lineW + radius;
+    const cy1base  = sy + labelGap + lineW + radius;
+    const chartH   = 2 * (radius + lineW) + clamp(radius * 0.35, 8, 16) + 10;
+    const cx1 = L.W < 800 ? px + pw / 2 : px + tickW + lineW + radius;
+    const cx2 = L.W < 800 ? px + pw / 2 : px + pw - tickW - lineW - radius;
+    const cy1 = cy1base;
+    const cy2 = L.W < 800 ? cy1base + chartH : cy1base;
     const trackClr = '#E8E8E8';
 
     // Gauge arc: 270° sweep starting at 0 (top), gap on upper-left
@@ -856,8 +880,8 @@ function drawStatsPanel(L, fontFamily, outlineText) {
     const hovClr = data.hoveredColor || '#8B7BB5';
 
     const charts = [
-      { label: 'Strong',   val: data.conn.strong,   total: data.connTotals.strong,   hovFill: hovClr,        border: '#AAAAAA', cx: cx1 },
-      { label: 'Moderate', val: data.conn.moderate,  total: data.connTotals.moderate, hovFill: hovClr + '88', border: '#CCCCCC', cx: cx2 },
+      { label: 'Strong',   val: data.conn.strong,   total: data.connTotals.strong,   hovFill: hovClr,        border: '#AAAAAA', cx: cx1, cy: cy1 },
+      { label: 'Moderate', val: data.conn.moderate,  total: data.connTotals.moderate, hovFill: hovClr + '88', border: '#CCCCCC', cx: cx2, cy: cy2 },
     ];
 
     const numFont  = '300 ' + clamp(radius * 0.55, 12, 28) + 'px ' + fontFamily;
@@ -873,7 +897,7 @@ function drawStatsPanel(L, fontFamily, outlineText) {
       if (isHovered) {
         // Hovered: light grey track + colored fill
         ctx.beginPath();
-        ctx.arc(ch.cx, cy, radius, arcStart, arcEnd);
+        ctx.arc(ch.cx, ch.cy, radius, arcStart, arcEnd);
         ctx.strokeStyle = trackClr;
         ctx.lineWidth = lineW;
         ctx.lineCap = 'round';
@@ -882,7 +906,7 @@ function drawStatsPanel(L, fontFamily, outlineText) {
 
         if (frac > 0) {
           ctx.beginPath();
-          ctx.arc(ch.cx, cy, radius, valStart, valEnd);
+          ctx.arc(ch.cx, ch.cy, radius, valStart, valEnd);
           ctx.strokeStyle = ch.hovFill;
           ctx.lineWidth = lineW;
           ctx.lineCap = 'round';
@@ -891,7 +915,7 @@ function drawStatsPanel(L, fontFamily, outlineText) {
       } else {
         // Not hovered: simple light grey fill, no outline
         ctx.beginPath();
-        ctx.arc(ch.cx, cy, radius, arcStart, arcEnd);
+        ctx.arc(ch.cx, ch.cy, radius, arcStart, arcEnd);
         ctx.strokeStyle = trackClr;
         ctx.lineWidth = lineW;
         ctx.lineCap = 'round';
@@ -910,7 +934,7 @@ function drawStatsPanel(L, fontFamily, outlineText) {
       const tickR = radius + lineW + clamp(radius * 0.18, 4, 10);
       ticks.forEach(t => {
         const tx = ch.cx + Math.cos(t.angle) * tickR;
-        const ty = cy + Math.sin(t.angle) * tickR;
+        const ty = ch.cy + Math.sin(t.angle) * tickR;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(String(t.val), tx, ty);
@@ -921,14 +945,14 @@ function drawStatsPanel(L, fontFamily, outlineText) {
       ctx.fillStyle = '#000000';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(String(ch.val), ch.cx, cy);
+      ctx.fillText(String(ch.val), ch.cx, ch.cy);
 
       // Label above left (like "C1" in mockup → use chart label)
       ctx.font = chartLbl;
       ctx.fillStyle = '#000000';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'alphabetic';
-      ctx.fillText(ch.label, ch.cx, cy + radius + lineW + clamp(radius * 0.35, 8, 16));
+      ctx.fillText(ch.label, ch.cx, ch.cy + radius + lineW + clamp(radius * 0.35, 8, 16));
     });
 
     ctx.textAlign = 'left';
@@ -937,7 +961,7 @@ function drawStatsPanel(L, fontFamily, outlineText) {
 
   // ── Section 4: DESCRIPTION ───────────────────────────────────────────────
   {
-    const descY = slot4Y+40;
+    const descY = slot4Y + (L.W < 500 ? 10 : -10);
     const descFontSize = L.fonts.header;
     const descFont = '300 ' + descFontSize + 'px ' + fontFamily;
     ctx.font = descFont;
@@ -965,6 +989,8 @@ function drawStatsPanel(L, fontFamily, outlineText) {
     ctx.fillStyle = '#000000';
   }
 
+  ctx.restore();  // end stats panel clip
+
   window._statsPanelX = px;
   window._statsPanelW = pw;
 }
@@ -988,10 +1014,24 @@ function draw() {
   ctx.fillRect(0, 0, L.W, L.H);
 
   // ── Title — left panel margin, above CATEGORY ─────────────────────────────
-  const spxTitle = L.W * (window.BIPARTITE_CONSTS.layout.statsPanelX ?? 0.04);
-  ctx.font = '100 ' + clamp(L.W * 0.03, 20, 50) + 'px ' + fontFamily;
+  const spxTitle = L.W * (L.W < 800 ? 0.005 : (window.BIPARTITE_CONSTS.layout.statsPanelX ?? 0.04));
+  const titleFontSz = clamp(L.W * 0.03, 20, 50);
+  ctx.font = '100 ' + titleFontSz + 'px ' + fontFamily;
   ctx.fillStyle = '#000000'; ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
-  outlineText(title.text, spxTitle, L.titleY);
+  if (L.W < 800 && title.text && title.text.includes(' ')) {
+    // Split into 2 lines at the word boundary closest to visual midpoint
+    const words = title.text.split(' ');
+    let best = Infinity, splitIdx = 1;
+    for (let i = 1; i < words.length; i++) {
+      const diff = Math.abs(ctx.measureText(words.slice(0, i).join(' ')).width -
+                            ctx.measureText(words.slice(i).join(' ')).width);
+      if (diff < best) { best = diff; splitIdx = i; }
+    }
+    outlineText(words.slice(0, splitIdx).join(' '), spxTitle, L.titleY);
+    outlineText(words.slice(splitIdx).join(' '),    spxTitle, L.titleY + titleFontSz * 1.2);
+  } else {
+    outlineText(title.text, spxTitle, L.titleY);
+  }
 
   // ── Stats panel (left whitespace) ─────────────────────────────────────────
   drawStatsPanel(L, fontFamily, outlineText);
@@ -1041,10 +1081,17 @@ function draw() {
       ctx.font = '300 ' + L.fonts.sub + 'px ' + fontFamily;
       ctx.fillStyle = '#000000';
       ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
-      const lines = wrapLabel(sn.label, 30);
+      const lines = wrapLabel(sn.label, L.W < 800 ? 13 : 30);
+      // On mobile, clip labels so they don't bleed over the stats panel
+      if (L.W < 800 && window._statsPanelW) {
+        const clipX = (window._statsPanelX || 0) + window._statsPanelW + 4;
+        ctx.save();
+        ctx.beginPath(); ctx.rect(clipX, 0, L.W - clipX, L.H); ctx.clip();
+      }
       lines.forEach((l, li) => {
         outlineText(l, L.col1X - L.labelPad, sn.midY + (li - (lines.length - 1) / 2) * L.lineGap);
       });
+      if (L.W < 800 && window._statsPanelW) ctx.restore();
     }
   });
 
@@ -1118,17 +1165,17 @@ function draw() {
 
   // ── Credit text + buttons in left panel, aligned with legend row ──
   const spx = window._statsPanelX || L.W * 0.04;
-  const creditY = L.footerY; // same vertical line as legend
+  const creditY = L.W < 800 ? L.footerY - clamp(L.W * 0.04, 26, 36) - 20 : L.footerY;
   const creditText = '© Mohamad T. Araji';
   ctx.fillStyle = '#000000'; ctx.textAlign = 'left'; ctx.globalAlpha = 1;
   ctx.font = '300 ' + fSize + 'px ' + fontFamily;
   ctx.textBaseline = 'middle';
   outlineText(creditText, spx, creditY);
 
-  // Store buttons position — left panel, right of credit, same Y as legend
+  // Store buttons position — on mobile: below credit; on desktop: right of credit
   const creditW = ctx.measureText(creditText).width;
-  window._footerBtnsX = spx + creditW + 20;
-  window._footerBtnsY = creditY;
+  window._footerBtnsX = L.W < 800 ? spx : spx + creditW + 20;
+  window._footerBtnsY = L.W < 800 ? creditY + fSize + 10 : creditY;
 }
 
 function hitTest(mx, my) {
