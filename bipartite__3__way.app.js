@@ -18,6 +18,30 @@ const title = {
   text:"",
 }
 
+// Throttled scroll save
+let scrollTimeout;
+window.addEventListener('scroll', () => {
+  clearTimeout(scrollTimeout);
+  scrollTimeout = setTimeout(() => {
+    sessionStorage.setItem('scrollY', window.scrollY);
+  }, 150);
+});
+
+// Restore — call this AFTER your visualization renders
+function restoreScroll() {
+  const saved = sessionStorage.getItem('scrollY');
+  if (saved) window.scrollTo(0, parseInt(saved));
+}
+
+// Also restore when tab becomes visible again
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    restoreScroll();
+  }
+});
+
+
+
 const columnHeader = {
   left: 'Methods',
   middle: 'Learning outcomes',
@@ -287,6 +311,9 @@ async function loadAndRender() {
     console.warn('Excel load failed (likely file:// CORS). Using default data.', e);
   }
   render();
+  // after your sankey .append() chain completes
+  restoreScroll();
+
 }
 
 function clamp(v, min, max) {
@@ -1508,3 +1535,4 @@ canvas.addEventListener('mouseleave', () => {
 });
 
 loadAndRender();
+
