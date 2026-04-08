@@ -762,12 +762,12 @@ function drawStatsPanel(L, fontFamily, outlineText) {
   const titleH     = L.W < 800 ? _titleFsz * 1.4 : _titleFsz * 0.75; // 2 lines on mobile
   const _bigF      = clamp(L.W * 0.055, 32, 62);
   const catH       = clamp(L.W * 0.052, 48, 80) + _bigF * 0.78;
-  const impH       = clamp(L.W * 0.052, 48, 72) + _bigF * 0.78;
+  const impH       = clamp(L.W * 0.052, 48, 72) + _bigF * 0.6;
   const _cRad      = L.W < 800 ? Math.max((pw * 0.66 - 24) / 2.396, 14) : Math.max((pw * 0.92 - 48) / 4.88, 14);
   const _cLW       = clamp(_cRad * 0.198, 2.7, 9);
   const _oneChartH = clamp(L.W * 0.016, 12, 24) + _cLW + 2 * _cRad + _cLW + clamp(_cRad * 0.35, 8, 16) + 8;
-  const connH      = L.W < 800 ? _oneChartH * 2 + 10 : _oneChartH;
-  const descH      = 40 + 7 * (L.fonts.header * 1.28);
+  const connH      = L.W < 800 ? _oneChartH * 2 : _oneChartH;
+  const descH      = L.W < 800 ? clamp(L.W * 0.032, 150, 220) : clamp(L.W * 0.022, 12, 28) + clamp(L.W * 0.011, 9, 11) * 1.3;
   const rawGap     = (totalH - titleH - catH - impH - connH - descH) / 5;
   const sectionGap = Math.max(L.W < 800 ? Math.min(rawGap, 42) : rawGap, 8);
   const fullGap    = connH + sectionGap;           // kept for connections chart sizing
@@ -843,7 +843,7 @@ function drawStatsPanel(L, fontFamily, outlineText) {
 
     // Size charts to span full panel width
     const labelGap = clamp(L.W * 0.016, 12, 24);
-    const chartLabelH = 18;
+    const chartLabelH = 12;
     const slotPad = fullGap * 0.15;
     const maxRv  = Math.max((fullGap - labelGap - chartLabelH - slotPad) / 2.4, 14);
     // Fill panel: px + tickW + lineW + R ... R + lineW + tickW = px + pw
@@ -866,7 +866,7 @@ function drawStatsPanel(L, fontFamily, outlineText) {
     const cx1 = L.W < 800 ? px + pw / 2 : px + tickW + lineW + radius;
     const cx2 = L.W < 800 ? px + pw / 2 : px + pw - tickW - lineW - radius;
     const cy1 = cy1base;
-    const cy2 = L.W < 800 ? cy1base + chartH : cy1base;
+    const cy2 = L.W < 800 ? cy1base + chartH + 30 : cy1base;
     const trackClr = '#E8E8E8';
 
     // Gauge arc: 270° sweep starting at 0 (top), gap on upper-left
@@ -961,9 +961,10 @@ function drawStatsPanel(L, fontFamily, outlineText) {
 
   // ── Section 4: DESCRIPTION ───────────────────────────────────────────────
   {
-    const descY = slot4Y + (L.W < 500 ? 10 : -10);
+    const descY = slot4Y;
     const descFontSize = L.fonts.header;
     const descFont = '300 ' + descFontSize + 'px ' + fontFamily;
+    // estimate desc text height
     ctx.font = descFont;
     ctx.fillStyle = '#000000';
     ctx.textBaseline = 'alphabetic';
@@ -1109,7 +1110,14 @@ function draw() {
       ctx.font = '300 ' + L.fonts.mid + 'px ' + fontFamily;
       ctx.fillStyle = '#000000';
       ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-      outlineText(mn.label, L.col2X + L.nodeW + L.labelPad, mn.midY);
+      if (L.W < 555) {
+        const lines = wrapLabel(mn.label, 15);
+        lines.forEach((l, li) => {
+          outlineText(l, L.col2X + L.nodeW + L.labelPad, mn.midY + (li - (lines.length - 1) / 2) * L.lineGap);
+        });
+      } else {
+        outlineText(mn.label, L.col2X + L.nodeW + L.labelPad, mn.midY);
+      }
     }
   });
 
@@ -1137,7 +1145,7 @@ function draw() {
 
   const swatchW = clamp(L.W * 0.009, 7, 10);
   const rowGap  = clamp(L.W * 0.016, 12, 20);
-  const figMidX = (L.col1X + L.col3X) / 2;
+  const figMidX = L.W < 800 ? L.W / 2 : (L.col1X + L.col3X) / 2;
   const midCatOrder = ['res', 'des', 'tech', 'comm'];
 
   // ── Legend centered on figure columns ──
@@ -1146,22 +1154,50 @@ function draw() {
     ...midCatOrder.map(id => ({ color: midCatColors[id].base, label: midCatColors[id].label, tw: ctx.measureText(midCatColors[id].label).width, catId: id,   colType: 'mid'  }))
   ];
 
-  const legendW = allLegendItems.reduce((s, it) => s + swatchW + 5 + it.tw, 0) + rowGap * (allLegendItems.length - 1);
-  let rx = figMidX - legendW / 2;
-
   window._legendHitBoxes = [];
-  allLegendItems.forEach(({ color, label, tw, catId, colType }) => {
-    const itemW = swatchW + 5 + tw;
-    window._legendHitBoxes.push({ x: rx, y: L.footerY - swatchW, w: itemW, h: swatchW * 2, catId, colType });
-    const isHovered = hoverTarget.type === 'cat' && hoverTarget.catId === catId && hoverTarget.colType === colType;
-    ctx.fillStyle = color; ctx.globalAlpha = isHovered ? 1.0 : 0.9;
-    const r = swatchW * 0.35;
-    ctx.beginPath(); ctx.roundRect(rx, L.footerY - swatchW / 2, swatchW, swatchW, r); ctx.fill();
-    ctx.globalAlpha = isHovered ? 1.0 : 1;
-    ctx.fillStyle = color; ctx.textAlign = 'left';
-    outlineText(label, rx + swatchW + 5, L.footerY);
-    rx += swatchW + 5 + tw + rowGap;
-  });
+
+  if (L.W < 555) {
+    // 2-row legend centered under the figure
+    const figCenterX = (L.col1X + L.col3X + L.nodeW) / 2;
+    const rowH = fSize * 1.8;
+    const half = Math.ceil(allLegendItems.length / 2);
+    const rows = [allLegendItems.slice(0, half), allLegendItems.slice(half)];
+
+    rows.forEach((rowItems, ri) => {
+      const rw = rowItems.reduce((s, it) => s + swatchW + 5 + it.tw, 0) + rowGap * (rowItems.length - 1);
+      let rx = figCenterX - rw / 2;
+      const ry = L.footerY + ri * rowH;
+
+      rowItems.forEach(({ color, label, tw, catId, colType }) => {
+        const itemW = swatchW + 5 + tw;
+        window._legendHitBoxes.push({ x: rx, y: ry - swatchW, w: itemW, h: swatchW * 2, catId, colType });
+        const isHovered = hoverTarget.type === 'cat' && hoverTarget.catId === catId && hoverTarget.colType === colType;
+        ctx.fillStyle = color; ctx.globalAlpha = isHovered ? 1.0 : 0.9;
+        const r = swatchW * 0.35;
+        ctx.beginPath(); ctx.roundRect(rx, ry - swatchW / 2, swatchW, swatchW, r); ctx.fill();
+        ctx.globalAlpha = isHovered ? 1.0 : 1;
+        ctx.fillStyle = color; ctx.textAlign = 'left';
+        outlineText(label, rx + swatchW + 5, ry);
+        rx += swatchW + 5 + tw + rowGap;
+      });
+    });
+  } else {
+    const legendW = allLegendItems.reduce((s, it) => s + swatchW + 5 + it.tw, 0) + rowGap * (allLegendItems.length - 1);
+    let rx = figMidX - legendW / 2;
+
+    allLegendItems.forEach(({ color, label, tw, catId, colType }) => {
+      const itemW = swatchW + 5 + tw;
+      window._legendHitBoxes.push({ x: rx, y: L.footerY - swatchW, w: itemW, h: swatchW * 2, catId, colType });
+      const isHovered = hoverTarget.type === 'cat' && hoverTarget.catId === catId && hoverTarget.colType === colType;
+      ctx.fillStyle = color; ctx.globalAlpha = isHovered ? 1.0 : 0.9;
+      const r = swatchW * 0.35;
+      ctx.beginPath(); ctx.roundRect(rx, L.footerY - swatchW / 2, swatchW, swatchW, r); ctx.fill();
+      ctx.globalAlpha = isHovered ? 1.0 : 1;
+      ctx.fillStyle = color; ctx.textAlign = 'left';
+      outlineText(label, rx + swatchW + 5, L.footerY);
+      rx += swatchW + 5 + tw + rowGap;
+    });
+  }
 
   // ── Credit text + buttons in left panel, aligned with legend row ──
   const spx = window._statsPanelX || L.W * 0.04;
