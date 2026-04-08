@@ -976,7 +976,7 @@ function drawStatsPanel(L, fontFamily, outlineText) {
     ctx.textBaseline = 'alphabetic';
     ctx.textAlign = 'left';
 
-    const descText = 'This visualization maps the relationships between methods, learning outcomes, and critiques in the design studio to support self-reflection and create opportunities for teaching innovation in content design and delivery.';
+    const descText = 'This visualization maps the relationships between assessment criteria, process, and learning modes in the design studio to support self-reflection and create opportunities for teaching innovation in content design and delivery.';
     const maxDescW = pw;
     const dWords = descText.split(' ');
     const dLines = [];
