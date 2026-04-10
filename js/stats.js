@@ -3,7 +3,7 @@
 //   • left sub   → flows1 (sub→mid), ranked among all subs
 //   • middle mid → flows1 (sub→mid) + flows2 (mid→alt), ranked among all mids
 //   • right alt  → flows2 (mid→alt), ranked among all alts
-// Score per item: 3·S + 1·M + 0.5·W over its attached links.
+// Score per item: 0.75·(colW · catW) + 0.25·(3·S + 1·M + 0.5·W) over its attached links.
 // "No" = (max possible links on that node) − links of any strength.
 // Default (nothing hovered): shows totals across the LEFT column.
 function computeStatsData() {
@@ -14,8 +14,8 @@ function computeStatsData() {
     else if (strength === M) a.mC++;
     else if (strength === W) a.wC++;
   }
-  // Score = itemWeightInColumn * (3·Strong + 1·Medium + 0.5·Weak)
-  const scoreOf = (a, itemWeight) => itemWeight * (3 * a.sC + 1 * a.mC + 0.5 * a.wC);
+  // Score = 0.75 · (itemWeightInColumn · itemWeightInCategory) + 0.25 · (3·Strong + 1·Medium + 0.5·Weak)
+  const scoreOf = (a, colW, catW) => 0.75 * (colW * catW) + 0.25 * (3 * a.sC + 1 * a.mC + 0.5 * a.wC);
 
   // Standard competition ranking (ties share a rank)
   function rankItems(items) {
@@ -40,8 +40,9 @@ function computeStatsData() {
     const a = { sC: 0, mC: 0, wC: 0 };
     flows1.forEach(f => { if (f.subIdx === si) bucket(f.strength, a); });
     const nC = Math.max(0, midNodes.length - (a.sC + a.mC + a.wC));
-    const itemWeight = totalSubH > 0 ? (sn.h / totalSubH) * 100 : 0;
-    return { idx: si, ...a, nC, score: scoreOf(a, itemWeight) };
+    const colW = totalSubH > 0 ? (sn.h / totalSubH) * 100 : 0;
+    const catW = parseFloat(sn.w) || 0;
+    return { idx: si, ...a, nC, score: scoreOf(a, colW, catW) };
   });
   const subRank = rankItems(perSub);
 
@@ -52,18 +53,20 @@ function computeStatsData() {
     flows2.forEach(f => { if (f.midIdx === mi) bucket(f.strength ?? W, a); });
     const maxLinks = subNodes.length + altNodes.length;
     const nC = Math.max(0, maxLinks - (a.sC + a.mC + a.wC));
-    const itemWeight = totalMidH > 0 ? (mn.h / totalMidH) * 100 : 0;
-    return { idx: mi, ...a, nC, score: scoreOf(a, itemWeight) };
+    const colW = totalMidH > 0 ? (mn.h / totalMidH) * 100 : 0;
+    const catW = parseFloat(mn.w) || 0;
+    return { idx: mi, ...a, nC, score: scoreOf(a, colW, catW) };
   });
   const midRank = rankItems(perMid);
 
-  // Per-alt (right column)
+  // Per-alt (right column) — alts aren't grouped in categories, so catW = pct
   const perAlt = altNodes.map((an, ai) => {
     const a = { sC: 0, mC: 0, wC: 0 };
     flows2.forEach(f => { if (f.altIdx === ai) bucket(f.strength ?? W, a); });
     const nC = Math.max(0, midNodes.length - (a.sC + a.mC + a.wC));
-    const itemWeight = totalAltH > 0 ? (an.h / totalAltH) * 100 : 0;
-    return { idx: ai, ...a, nC, score: scoreOf(a, itemWeight) };
+    const colW = totalAltH > 0 ? (an.h / totalAltH) * 100 : 0;
+    const catW = parseFloat(an.pct) || 0;
+    return { idx: ai, ...a, nC, score: scoreOf(a, colW, catW) };
   });
   const altRank = rankItems(perAlt);
 
