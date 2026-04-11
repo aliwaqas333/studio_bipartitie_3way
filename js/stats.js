@@ -15,7 +15,8 @@ function computeStatsData() {
     else if (strength === W) a.wC++;
   }
   // Score = 0.75 · (itemWeightInColumn · itemWeightInCategory) + 0.25 · (3·Strong + 1·Medium + 0.5·Weak)
-  const scoreOf = (a, colW, catW) => 0.75 * (colW * catW) + 0.25 * (3 * a.sC + 1 * a.mC + 0.5 * a.wC);
+  // const scoreOf = (a, colW, catW) => 0.75 * (colW * catW) + 0.25 * (3 * a.sC + 1 * a.mC + 0.5 * a.wC);
+  const scoreOf = (a, colW, catW) => 0.75 * (colW) + 0.25 * (3 * a.sC + 1 * a.mC + 0.5 * a.wC);
 
   // Standard competition ranking (ties share a rank)
   function rankItems(items) {
@@ -55,9 +56,9 @@ function computeStatsData() {
     const nC = Math.max(0, maxLinks - (a.sC + a.mC + a.wC));
     const colW = totalMidH > 0 ? (mn.h / totalMidH) * 100 : 0;
     const catW = parseFloat(mn.w) || 0;
-    return { idx: mi, ...a, nC, score: scoreOf(a, colW, catW) };
+    return { idx: mi, ...a, nC, score: scoreOf(a, colW, catW), colW, catW };
   });
-  const midRank = rankItems(perMid);
+  const midRank = rankItems(c);
 
   // Per-alt (right column) — alts aren't grouped in categories, so catW = pct
   const perAlt = altNodes.map((an, ai) => {
